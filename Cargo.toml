@@ -1,0 +1,17 @@
+[profile.dev]
+strip = "symbols"
+opt-level = 1
+debug = false
+
+[workspace]
+resolver = "3"
+members = ["workspace_crates/*"]
+
+[workspace.dependencies]
+config = "0.15.23"
+dotenvy = "0.15.7"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = {version = "1.0.150"}
+
+ 
+server = { git = "ssh://git@github.com/Aeroel/server_2_only.git"}
