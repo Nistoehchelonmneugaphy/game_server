@@ -10,6 +10,8 @@ members = ["workspace_crates/*"]
 [workspace.dependencies]
 shared = { path = "workspace_crates/shared" }
 strum = { version = "0.28.0", features = ["derive"] }
+sqlx = { version = "0.9.0", features = ["migrate", "postgres", "macros", "runtime-tokio", "time", "tls-rustls-aws-lc-rs"] }
+
 config = "0.15.23"
 dotenvy = "0.15.7"
 serde = { version = "1.0.228", features = ["derive"] }
