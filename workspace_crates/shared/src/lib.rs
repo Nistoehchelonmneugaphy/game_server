@@ -1,14 +1,26 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+pub use auth_system_structs;
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct ServerNonceResponse(pub String);
+
+#[derive(Debug, strum::EnumString, strum::Display, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum ServerAction {
+    InitLogin,
+    FinalLoginStep,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct FinalLoginStepRequest {
+    pub join_token: String,
+}
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct FinalLoginStepResponse {
+    pub cookie_token: String,
+}
+pub fn get_server_path(server_url: &str, action: ServerAction) -> String {
+    let action_string = action.to_string();
+    let ret = format!("{server_url}/{action_string}");
+    ret
 }
