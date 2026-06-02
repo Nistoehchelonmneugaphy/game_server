@@ -16,6 +16,7 @@ async fn main() {
     )
     .await
     .expect("Authentication failed");
+    // TODO: start bevy ui, save the cookie, etc, I dunno.
 }
 
 use client::ClientConfig;
