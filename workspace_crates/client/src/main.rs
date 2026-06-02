@@ -1,4 +1,3 @@
-
 #[tokio::main]
 async fn main() {
     let client_config = server::config_reader::read_config::<ClientConfig>("client.env".into());
@@ -22,7 +21,11 @@ async fn main() {
 use client::ClientConfig;
 // auth.rs
 use reqwest::Client;
-use shared::{FinalLoginStepRequest, FinalLoginStepResponse, ServerNonceResponse, auth_system_structs::public_api::{self, CreateJoinTokenResponse}, get_server_path};
+use shared::{
+    FinalLoginStepRequest, FinalLoginStepResponse, ServerNonceResponse,
+    auth_system_structs::public_api::{self, CreateJoinTokenResponse},
+    get_server_path,
+};
 
 pub async fn authenticate(
     reqwest_client: &Client,
@@ -40,7 +43,10 @@ pub async fn authenticate(
 
     // Step 3+4: exchange nonce + session_token with auth server for a server token
     let auth_resp: CreateJoinTokenResponse = reqwest_client
-        .post(public_api::get_full_url(auth_server_url.to_string(), public_api::PublicAPIAction::CreateJoinToken))
+        .post(public_api::get_full_url(
+            auth_server_url.to_string(),
+            public_api::PublicAPIAction::CreateJoinToken,
+        ))
         .json(&serde_json::json!({
             "nonce": nonce.0,
             "session_token": session_token,
@@ -53,21 +59,24 @@ pub async fn authenticate(
     let join_token = match auth_resp {
         CreateJoinTokenResponse::Success(create_join_token_success) => {
             create_join_token_success.join_token
-        },
+        }
         CreateJoinTokenResponse::Error(create_join_token_error) => {
             println!("{create_join_token_error:#?}");
             return Err(anyhow::anyhow!("{create_join_token_error:#?}"));
-        },
+        }
     };
 
-    
-let resp = reqwest_client
-    .post(get_server_path(server_url, shared::ServerAction::FinalLoginStep))
-    .json(&FinalLoginStepRequest { join_token })
-    .send()
-    .await?;
+    let resp = reqwest_client
+        .post(get_server_path(
+            server_url,
+            shared::ServerAction::FinalLoginStep,
+        ))
+        .json(&FinalLoginStepRequest { join_token })
+        .send()
+        .await?;
 
-let final_login: FinalLoginStepResponse = resp.json().await?;
-let cookie = final_login.cookie_token;
+    let final_login: FinalLoginStepResponse = resp.json().await?;
+    let cookie = final_login.cookie_token;
+    println!("Auth success, cookie: {cookie:#?}");
     Ok(cookie)
 }
