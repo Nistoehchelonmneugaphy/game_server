@@ -1,18 +1,16 @@
-use std::str::FromStr;
 
 use game_server::{GameServerConfig, ok_or_return_error_http_resp};
 use server::{
-    http_stuff::{
+    BackgroundSpawnTasks, http_stuff::{
         http_request_parsing::HttpRequestData,
         http_response::{Charset::Utf8, ContentType::ApplicationJson, HttpResponseData, ok},
-    },
-    server_config::ServerConfig,
+    }, server_config::ServerConfig
 };
 use shared::{
     FinalLoginStepError,
     FinalLoginStepErrorKind::JoinTokenValidationError,
-    FinalLoginStepRequest, FinalLoginStepResponse, FinalLoginStepSuccess, ServerAction,
-    ServerNonceResponse,
+    FinalLoginStepRequest, FinalLoginStepResponse, FinalLoginStepSuccess,
+    SendGlobalChatMessageRequest, SendGlobalChatMessageResponse, ServerAction, ServerNonceResponse,
     auth_system_structs::{
         self,
         public_api::{PublicAPIAction, ValidateJoinTokenResponse, get_full_url},
@@ -21,7 +19,7 @@ use shared::{
 use sqlx::{Pool, Postgres};
 
 #[tokio::main]
-async fn main() {
+async fn main() -> std::io::Result<()> {
     dotenvy::dotenv().ok();
     let game_server_config = server::config_reader::read_config::<GameServerConfig>(".env".into());
     println!("Starting the game server.");
@@ -40,6 +38,7 @@ async fn main() {
             route_handler(request_data, db_pool, server_config, game_server_config).await
         })
     });
+    server::run(server_config, env!("CARGO_PKG_VERSION").to_string(), handler, BackgroundSpawnTasks { new_tasks_to_spawn: None, cancellation_token: None }).await
 }
 
 async fn route_handler(
@@ -80,6 +79,14 @@ async fn route_handler(
             match validation_resp {
                 ValidateJoinTokenResponse::Valid(validate_join_token_success) => {
                     let user_id = validate_join_token_success.user_id;
+                    let username = validate_join_token_success.username;
+                    ok_or_return_error_http_resp!(sqlx::query!(
+                        "INSERT INTO users (user_id, username) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET username = EXCLUDED.username WHERE users.username != EXCLUDED.username",
+                        user_id,
+                        username,
+                    )
+                    .execute(&db_pool)
+                    .await);
                     let cookie_token = ok_or_return_error_http_resp!(sqlx::query!("INSERT INTO sessions (user_id, token) VALUES ($1, gen_random_uuid()::text) RETURNING token", user_id).fetch_one(&db_pool).await).token;
                     let final_resp =
                         FinalLoginStepResponse::Success(FinalLoginStepSuccess { cookie_token });
@@ -95,10 +102,60 @@ async fn route_handler(
                 }
             }
         }
+        ServerAction::SendGlobalChatMessage => {
+            send_global_chat_message(request_data, db_pool, server_config, game_server_config).await
+        }
     }
-    todo!()
 }
 
 fn respond(bytes: Vec<u8>) -> HttpResponseData {
     ok(bytes, ApplicationJson, Some(Utf8))
+}
+
+async fn send_global_chat_message(
+    request_data: HttpRequestData,
+    db_pool: Pool<Postgres>,
+    _server_config: ServerConfig,
+    _game_server_config: GameServerConfig,
+) -> HttpResponseData {
+    let req: SendGlobalChatMessageRequest =
+        ok_or_return_error_http_resp!(serde_json::from_slice(&request_data.body_bytes));
+    let ValidCookieToken {
+        cookie_token,
+        user_id,
+    } = ok_or_return_error_http_resp!(validate_cookie(db_pool.clone(), req.cookie).await);
+
+    let resp = match sqlx::query!(
+        "INSERT INTO global_chat_messages (user_id, content) VALUES ($1, $2)",
+        user_id,
+        cookie_token
+    )
+    .execute(&db_pool)
+    .await
+    {
+        Ok(_) => SendGlobalChatMessageResponse::SendSuccess,
+        Err(_) => SendGlobalChatMessageResponse::SendError,
+    };
+    let bytes = ok_or_return_error_http_resp!(serde_json::to_vec(&resp));
+    return respond(bytes);
+}
+struct ValidCookieToken {
+    cookie_token: String,
+    user_id: String,
+}
+async fn validate_cookie(
+    db_pool: Pool<Postgres>,
+    cookie_token: String,
+) -> Result<ValidCookieToken, String> {
+    let row = sqlx::query!(
+        "SELECT user_id FROM sessions WHERE token = $1",
+        cookie_token
+    )
+    .fetch_one(&db_pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(ValidCookieToken {
+        cookie_token,
+        user_id: row.user_id,
+    })
 }

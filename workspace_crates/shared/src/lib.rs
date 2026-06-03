@@ -8,6 +8,7 @@ pub struct ServerNonceResponse(pub String);
 pub enum ServerAction {
     InitLogin,
     FinalLoginStep,
+    SendGlobalChatMessage,
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
@@ -34,6 +35,18 @@ pub struct FinalLoginStepError {
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub enum FinalLoginStepErrorKind {
     JoinTokenValidationError,
+}
+
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct SendGlobalChatMessageRequest {
+    pub cookie: String,
+    pub message: String,
+}
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub enum SendGlobalChatMessageResponse {
+    SendSuccess,
+    SendError
 }
 
 pub fn get_server_path(server_url: &str, action: ServerAction) -> String {

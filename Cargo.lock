@@ -67,7 +67,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 [[package]]
 name = "auth_system_structs"
 version = "0.0.1"
-source = "git+ssh://git@github.com/Aeroel/auth_system.git#219b52e2bfeaa29ea7adfaf9746eeba963e26185"
+source = "git+ssh://git@github.com/Aeroel/auth_system.git#770d4d103dd90c2e1d86ef40757e81d910a4272a"
 dependencies = [
  "serde",
  "strum",
