@@ -186,7 +186,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "server 0.1.0 (git+ssh://git@github.com/Aeroel/server_2_only.git)",
+ "server",
  "shared",
  "tokio",
 ]
@@ -712,6 +712,17 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "slab",
+]
+
+[[package]]
+name = "game_server"
+version = "0.1.0"
+dependencies = [
+ "dotenvy",
+ "serde",
+ "server",
+ "sqlx",
+ "tokio",
 ]
 
 [[package]]
@@ -1954,15 +1965,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
 dependencies = [
  "serde_core",
-]
-
-[[package]]
-name = "server"
-version = "0.1.0"
-dependencies = [
- "dotenvy",
- "sqlx",
- "tokio",
 ]
 
 [[package]]
