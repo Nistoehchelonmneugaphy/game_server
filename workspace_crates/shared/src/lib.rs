@@ -13,14 +13,30 @@ pub enum ServerAction {
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct FinalLoginStepRequest {
     pub join_token: String,
+    pub server_nonce: String,
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-pub struct FinalLoginStepResponse {
+pub struct FinalLoginStepSuccess {
     pub cookie_token: String,
 }
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub enum FinalLoginStepResponse {
+    Success(FinalLoginStepSuccess),
+    Failure(FinalLoginStepError),
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct FinalLoginStepError {
+    pub kind: FinalLoginStepErrorKind,
+}
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub enum FinalLoginStepErrorKind {
+    JoinTokenValidationError,
+}
+
 pub fn get_server_path(server_url: &str, action: ServerAction) -> String {
     let action_string = action.to_string();
-    let ret = format!("{server_url}/{action_string}");
-    ret
+    format!("{server_url}/{action_string}")
 }

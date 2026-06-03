@@ -1,8 +1,7 @@
 CREATE TABLE sessions (
     primary_key BIGSERIAL PRIMARY KEY,
     user_id     TEXT NOT NULL,
-    token       TEXT NOT NULL UNIQUE,
-    join_token  TEXT NOT NULL UNIQUE
+    token       TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE server_nonces (

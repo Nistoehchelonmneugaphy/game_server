@@ -72,12 +72,22 @@ pub async fn authenticate(
             server_url,
             shared::ServerAction::FinalLoginStep,
         ))
-        .json(&FinalLoginStepRequest { join_token })
+        .json(&FinalLoginStepRequest {
+            join_token,
+            server_nonce: nonce.0,
+        })
         .send()
         .await?;
 
     let final_login: FinalLoginStepResponse = resp.json().await?;
-    let cookie = final_login.cookie_token;
-    println!("Auth success, cookie: {cookie:#?}");
-    Ok(cookie)
+    match final_login {
+        FinalLoginStepResponse::Success(final_login_step_success) => {
+            let cookie = final_login_step_success.cookie_token;
+            println!("Auth success, cookie: {cookie:#?}");
+            Ok(cookie)
+        }
+        FinalLoginStepResponse::Failure(final_login_step_error) => {
+            Err(anyhow::anyhow!(format!("Authentication error: {final_login_step_error:#?}")))
+        },
+    }
 }
