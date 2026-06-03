@@ -7,14 +7,10 @@ use server::{
     }, server_config::ServerConfig
 };
 use shared::{
-    FinalLoginStepError,
-    FinalLoginStepErrorKind::JoinTokenValidationError,
-    FinalLoginStepRequest, FinalLoginStepResponse, FinalLoginStepSuccess,
-    SendGlobalChatMessageRequest, SendGlobalChatMessageResponse, ServerAction, ServerNonceResponse,
-    auth_system_structs::{
+    FinalLoginStepError, FinalLoginStepErrorKind::JoinTokenValidationError, FinalLoginStepRequest, FinalLoginStepResponse, FinalLoginStepSuccess, SendGlobalChatMessageRequest, SendGlobalChatMessageResponse, ServerAction, ServerNonceResponse, ViewGlobalChatMessageRequest, auth_system_structs::{
         self,
         public_api::{PublicAPIAction, ValidateJoinTokenResponse, get_full_url},
-    },
+    }
 };
 use sqlx::{Pool, Postgres};
 
@@ -104,7 +100,10 @@ async fn route_handler(
         }
         ServerAction::SendGlobalChatMessage => {
             send_global_chat_message(request_data, db_pool, server_config, game_server_config).await
-        }
+        },
+        ServerAction::ViewGlobalChat => {
+             send_global_chat_message(request_data, db_pool, server_config, game_server_config).await
+        },
     }
 }
 
@@ -158,4 +157,25 @@ async fn validate_cookie(
         cookie_token,
         user_id: row.user_id,
     })
+}
+
+
+
+async fn view_global_chat(
+    request_data: HttpRequestData,
+    db_pool: Pool<Postgres>,
+    _server_config: ServerConfig,
+    _game_server_config: GameServerConfig,
+) -> HttpResponseData {
+    let req: ViewGlobalChatMessageRequest =
+        ok_or_return_error_http_resp!(serde_json::from_slice(&request_data.body_bytes));
+    let ValidCookieToken {
+        cookie_token,
+        user_id,
+    } = ok_or_return_error_http_resp!(validate_cookie(db_pool.clone(), req.cookie).await);
+    /*
+    General todo idea: simplest: just pick last 10 chat messages. Show in ascending order.
+    To improve later: pagination (chat will really be a forum thread - style thingie). 
+     */
+    todo!()
 }

@@ -9,6 +9,7 @@ pub enum ServerAction {
     InitLogin,
     FinalLoginStep,
     SendGlobalChatMessage,
+    ViewGlobalChat,
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
@@ -48,6 +49,21 @@ pub enum SendGlobalChatMessageResponse {
     SendSuccess,
     SendError
 }
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct ViewGlobalChatMessageRequest {
+    pub cookie: String,
+}
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct ViewGlobalChatMessageResponse {
+    pub messages: Vec<ChatMessage>,
+}
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct ChatMessage {
+    pub content: String,
+    pub username: String,
+}
+
 
 pub fn get_server_path(server_url: &str, action: ServerAction) -> String {
     let action_string = action.to_string();
