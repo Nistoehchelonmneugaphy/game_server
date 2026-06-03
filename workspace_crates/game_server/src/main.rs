@@ -8,4 +8,5 @@ async fn main() {
         server::config_reader::read_config::<GameServerConfig>(".env".into());
     println!("Starting the game server.");
     
+
 }
