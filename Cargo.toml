@@ -8,7 +8,7 @@ resolver = "3"
 members = ["workspace_crates/*"]
 
 [workspace.dependencies]
-shared = { path = "workspace_crates/shared" }
+game_server_structs = { path = "workspace_crates/game_server_structs" }
 strum = { version = "0.28.0", features = ["derive"] }
 sqlx = { version = "0.9.0", features = ["migrate", "postgres", "macros", "runtime-tokio", "time", "tls-rustls-aws-lc-rs"] }
 

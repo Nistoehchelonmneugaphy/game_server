@@ -6,7 +6,7 @@ use server::{
         http_response::{Charset::Utf8, ContentType::ApplicationJson, HttpResponseData, ok},
     }, server_config::ServerConfig
 };
-use shared::{
+use game_server_structs::{
     FinalLoginStepError, FinalLoginStepErrorKind::JoinTokenValidationError, FinalLoginStepRequest, FinalLoginStepResponse, FinalLoginStepSuccess, SendGlobalChatMessageRequest, SendGlobalChatMessageResponse, ServerAction, ServerNonceResponse, ViewGlobalChatMessageRequest, auth_system_structs::{
         self,
         public_api::{PublicAPIAction, ValidateJoinTokenResponse, get_full_url},

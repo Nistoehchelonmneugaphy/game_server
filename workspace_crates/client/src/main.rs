@@ -22,7 +22,7 @@ async fn main() {
 use client::ClientConfig;
 // auth.rs
 use reqwest::Client;
-use shared::{
+use game_server_structs::{
     FinalLoginStepRequest, FinalLoginStepResponse, ServerNonceResponse,
     auth_system_structs::public_api::{self, CreateJoinTokenResponse},
     get_server_path,
@@ -36,7 +36,7 @@ pub async fn authenticate(
 ) -> anyhow::Result<String> {
     // Step 1+2: get nonce from server
     let nonce: ServerNonceResponse = reqwest_client
-        .post(get_server_path(server_url, shared::ServerAction::InitLogin))
+        .post(get_server_path(server_url, game_server_structs::ServerAction::InitLogin))
         .send()
         .await?
         .json()
@@ -70,7 +70,7 @@ pub async fn authenticate(
     let resp = reqwest_client
         .post(get_server_path(
             server_url,
-            shared::ServerAction::FinalLoginStep,
+            game_server_structs::ServerAction::FinalLoginStep,
         ))
         .json(&FinalLoginStepRequest {
             join_token,

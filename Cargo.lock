@@ -206,11 +206,11 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "game_server_structs",
  "reqwest",
  "serde",
  "serde_json",
  "server",
- "shared",
  "tokio",
 ]
 
@@ -743,13 +743,22 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dotenvy",
+ "game_server_structs",
  "reqwest",
  "serde",
  "serde_json",
  "server",
- "shared",
  "sqlx",
  "tokio",
+]
+
+[[package]]
+name = "game_server_structs"
+version = "0.1.0"
+dependencies = [
+ "auth_system_structs",
+ "serde",
+ "strum",
 ]
 
 [[package]]
@@ -2086,15 +2095,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
-]
-
-[[package]]
-name = "shared"
-version = "0.1.0"
-dependencies = [
- "auth_system_structs",
- "serde",
- "strum",
 ]
 
 [[package]]

@@ -10,4 +10,4 @@ server = { workspace = true }
 tokio = { workspace = true }
 reqwest = { workspace = true }
 anyhow = { workspace = true }
-shared = { workspace = true }
+game_server_structs = { workspace = true }
