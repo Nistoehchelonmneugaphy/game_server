@@ -4,7 +4,7 @@ use server::{
     BackgroundSpawnTasks, http_stuff::{
         http_request_parsing::HttpRequestData,
         http_response::{Charset::Utf8, ContentType::ApplicationJson, HttpResponseData, ok},
-    }, server_config::ServerConfig
+    }, log_tracing::init_tracing, server_config::ServerConfig
 };
 use game_server_structs::{
     FinalLoginStepError, FinalLoginStepErrorKind::JoinTokenValidationError, FinalLoginStepRequest, FinalLoginStepResponse, FinalLoginStepSuccess, SendGlobalChatMessageRequest, SendGlobalChatMessageResponse, ServerAction, ServerNonceResponse, ViewGlobalChatMessageRequest, auth_system_structs::{
@@ -43,7 +43,9 @@ async fn route_handler(
     server_config: ServerConfig,
     game_server_config: GameServerConfig,
 ) -> HttpResponseData {
-    let action: ServerAction = ok_or_return_error_http_resp!(request_data.path.clone().parse());
+    let path = request_data.path.clone();
+    let action_str = ok_or_return_error_http_resp!(path.strip_prefix('/').ok_or("Path did not start with slash"));
+    let action: ServerAction = ok_or_return_error_http_resp!(action_str.parse(), format!("Could not parse action {}", request_data.path.clone()));
     match action {
         ServerAction::InitLogin => {
             let nonce = ok_or_return_error_http_resp!(sqlx::query!("INSERT INTO server_nonces (nonce, expires_at) VALUES (gen_random_uuid()::text, $1) RETURNING nonce", chrono::Utc::now().timestamp()).fetch_one(&db_pool).await).nonce;
