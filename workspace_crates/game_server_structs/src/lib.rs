@@ -1,3 +1,4 @@
+pub mod websocket_communication;
 pub use auth_system_structs;
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
