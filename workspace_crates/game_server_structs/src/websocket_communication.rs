@@ -1,9 +1,10 @@
+use bevy_ecs::resource::Resource;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct UserId(pub String);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Resource, Debug, Clone, Serialize, Deserialize)]
 pub struct ClientMessage {
     pub cookie: String,
     pub content: ClientMessageContent,
@@ -16,7 +17,7 @@ pub enum ClientMessageContent {
     LeaveMatchmaking,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Resource, Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
     NewGlobalChatMessage {
         content: String,

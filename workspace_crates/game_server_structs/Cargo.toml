@@ -7,3 +7,4 @@ edition = "2024"
 serde = { workspace = true }
 auth_system_structs = { workspace = true }
 strum = { workspace = true }
+bevy_ecs = {version = "0.18.1", default-features = false}
