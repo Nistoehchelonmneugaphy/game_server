@@ -12,14 +12,12 @@ use std::{
 };
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::{Mutex, mpsc},
+    sync::{Mutex, broadcast, mpsc},
 };
 use tokio_tungstenite::{
     WebSocketStream, accept_async, accept_hdr_async,
     tungstenite::{
-        Message,
-        handshake::server::{Request, Response},
-        protocol::{CloseFrame, frame::coding::CloseCode},
+        self, Message, handshake::server::{Request, Response}, protocol::{CloseFrame, frame::coding::CloseCode}
     },
 };
 use tracing::{debug, error, info, instrument, warn};
@@ -76,27 +74,33 @@ pub async fn ws(db_pool: Pool<Postgres>) -> Result<()> {
         .await
         .expect(&format!("Couldn't bind to {address}"));
     info!("WebSocket server listening on {address}");
-    while let Ok((stream, _)) = listener.accept().await {
-        let peer = stream
+    let (shutdown_tx, _) = broadcast::channel::<()>(1);
+
+    loop {
+        tokio::select! {
+            Ok((stream, _)) = listener.accept() => {
+                let mut shutdown_rx = shutdown_tx.subscribe();
+                     let peer = stream
             .peer_addr()
             .expect("Connected streams should have a peer addr. Why did this why not have it?");
-        info!("Peer address: {}", peer);
+                    info!("Peer address: {}", peer);
 
-        tokio::spawn(accept_connection(app_state.clone(), peer, stream));
+                 tokio::spawn(handle_connection(shutdown_rx, app_state.clone(), peer, stream));
+            },
+            _ = server::shutdown_signal::shutdown_signal() => {
+                info!("Shutdown signal");
+                shutdown_tx.send(()).ok();
+                break;
+            }
+        }
     }
+
     Ok(())
 }
 
-pub async fn accept_connection(
-    app_state: AppState,
-    peer: SocketAddr,
-    stream: TcpStream,
-) -> Result<()> {
-    handle_connection(app_state, peer, stream).await?;
-    Ok(())
-}
 
 pub async fn handle_connection(
+    mut shutdown_rx: broadcast::Receiver<()>,
     app_state: AppState,
     peer: SocketAddr,
     stream: TcpStream,
@@ -167,7 +171,14 @@ pub async fn handle_connection(
                     break;
                  },
             }},
-            Some(server_msg) = rx.recv() => handle_send_server_msg(server_msg, &mut ws_write).await?
+            Some(server_msg) = rx.recv() => handle_send_server_msg(server_msg, &mut ws_write).await?,
+            _ = shutdown_rx.recv() => {
+                println!("Closing connection due to server shutdown.");
+                // Send a graceful close frame to the client
+                let close_frame = tungstenite::protocol::Message::Close(None);
+                let _ = ws_write.send(close_frame).await;
+                break; 
+            }
         }
     }
     Ok(())
@@ -205,7 +216,9 @@ async fn handle_receive_client_msg(
                     return Ok(ContinueOrBreak::Continue);
                 }
             };
-            handle_client_message(parsed, &app_state, ws_write).await.ok();
+            handle_client_message(parsed, &app_state, ws_write)
+                .await
+                .ok();
         }
         Some(Err(e)) => {
             warn!("WebSocket error for user_id {user_id:#?}: {e:#?}");
