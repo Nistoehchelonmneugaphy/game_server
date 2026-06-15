@@ -1,16 +1,23 @@
-
 use game_server::{GameServerConfig, ok_or_return_error_http_resp, websocket::ws};
-use server::{
-    BackgroundSpawnTasks, http_stuff::{
-        http_request_parsing::HttpRequestData,
-        http_response::{Charset::Utf8, ContentType::ApplicationJson, HttpResponseData, ok},
-    }, log_tracing::init_tracing, server_config::ServerConfig
-};
 use game_server_structs::{
-    FinalLoginStepError, FinalLoginStepErrorKind::JoinTokenValidationError, FinalLoginStepRequest, FinalLoginStepResponse, FinalLoginStepSuccess, SendGlobalChatMessageRequest, SendGlobalChatMessageResponse, ServerAction, ServerNonceResponse, ViewGlobalChatMessageRequest, auth_system_structs::{
+    FinalLoginStepError,
+    FinalLoginStepErrorKind::JoinTokenValidationError,
+    FinalLoginStepRequest, FinalLoginStepResponse, FinalLoginStepSuccess,
+    SendGlobalChatMessageRequest, SendGlobalChatMessageResponse, ServerAction, ServerNonceResponse,
+    ViewGlobalChatMessageRequest,
+    auth_system_structs::{
         self,
         public_api::{PublicAPIAction, ValidateJoinTokenResponse, get_full_url},
-    }
+    },
+};
+use server::{
+    BackgroundSpawnTasks,
+    http_stuff::{
+        http_request_parsing::HttpRequestData,
+        http_response::{Charset::Utf8, ContentType::ApplicationJson, HttpResponseData, ok},
+    },
+    log_tracing::init_tracing,
+    server_config::ServerConfig,
 };
 use sqlx::{Pool, Postgres};
 
@@ -23,6 +30,7 @@ async fn main() -> std::io::Result<()> {
     let db_pool = sqlx::PgPool::connect(&game_server_config.database_url)
         .await
         .expect("I expected pool construction to succeed :)");
+    let db_pool_clone_for_ws = db_pool.clone();
     let server_config = ServerConfig::new(
         game_server_config.ip.clone(),
         game_server_config.port,
@@ -35,8 +43,17 @@ async fn main() -> std::io::Result<()> {
             route_handler(request_data, db_pool, server_config, game_server_config).await
         })
     });
-    let serv = server::run(server_config, env!("CARGO_PKG_VERSION").to_string(), handler, BackgroundSpawnTasks { new_tasks_to_spawn: None, cancellation_token: None });
-    let ws = ws(db_pool.clone());
+    let serv = server::run(
+        server_config,
+        env!("CARGO_PKG_VERSION").to_string(),
+        handler,
+        BackgroundSpawnTasks {
+            new_tasks_to_spawn: None,
+            cancellation_token: None,
+        },
+    );
+    let ws = ws(db_pool_clone_for_ws.clone());
+    Ok(())
 }
 
 async fn route_handler(
@@ -46,8 +63,14 @@ async fn route_handler(
     game_server_config: GameServerConfig,
 ) -> HttpResponseData {
     let path = request_data.path.clone();
-    let action_str = ok_or_return_error_http_resp!(path.strip_prefix('/').ok_or("Path did not start with slash"));
-    let action: ServerAction = ok_or_return_error_http_resp!(action_str.parse(), format!("Could not parse action {}", request_data.path.clone()));
+    let action_str = ok_or_return_error_http_resp!(
+        path.strip_prefix('/')
+            .ok_or("Path did not start with slash")
+    );
+    let action: ServerAction = ok_or_return_error_http_resp!(
+        action_str.parse(),
+        format!("Could not parse action {}", request_data.path.clone())
+    );
     match action {
         ServerAction::InitLogin => {
             let nonce = ok_or_return_error_http_resp!(sqlx::query!("INSERT INTO server_nonces (nonce, expires_at) VALUES (gen_random_uuid()::text, $1) RETURNING nonce", chrono::Utc::now().timestamp()).fetch_one(&db_pool).await).nonce;
@@ -104,10 +127,10 @@ async fn route_handler(
         }
         ServerAction::SendGlobalChatMessage => {
             send_global_chat_message(request_data, db_pool, server_config, game_server_config).await
-        },
+        }
         ServerAction::ViewGlobalChat => {
-             send_global_chat_message(request_data, db_pool, server_config, game_server_config).await
-        },
+            send_global_chat_message(request_data, db_pool, server_config, game_server_config).await
+        }
     }
 }
 
@@ -163,8 +186,6 @@ async fn validate_cookie(
     })
 }
 
-
-
 async fn view_global_chat(
     request_data: HttpRequestData,
     db_pool: Pool<Postgres>,
@@ -179,7 +200,7 @@ async fn view_global_chat(
     } = ok_or_return_error_http_resp!(validate_cookie(db_pool.clone(), req.cookie).await);
     /*
     General todo idea: simplest: just pick last 10 chat messages. Show in ascending order.
-    To improve later: pagination (chat will really be a forum thread - style thingie). 
+    To improve later: pagination (chat will really be a forum thread - style thingie).
      */
     todo!()
 }
