@@ -217,6 +217,7 @@ async fn handle_client_message(
                 username: username.clone(),
                 user_id: user_id.clone(),
             };
+            debug!("Sent message {content}");
             {
                 let clients = app_state.connected_clients.lock().await;
                 for (_, tx) in clients.iter() {
