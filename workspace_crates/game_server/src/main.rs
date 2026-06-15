@@ -36,9 +36,10 @@ async fn main() -> anyhow::Result<()> {
         game_server_config.port,
         game_server_config.rust_log_directory_path.clone(),
     );
+    let game_server_config_clone = game_server_config.clone();
     let handler = server::HandlerFn::new(move |request_data, server_config| {
         let db_pool = db_pool.clone();
-        let game_server_config = game_server_config.clone();
+        let game_server_config = game_server_config_clone.clone();
         Box::pin(async move {
             route_handler(request_data, db_pool, server_config, game_server_config).await
         })
@@ -52,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
             cancellation_token: None,
         },
     );
-    let ws = ws(db_pool_clone_for_ws.clone());
+    let ws = ws(db_pool_clone_for_ws.clone(), game_server_config.ws_ip, game_server_config.ws_port);
     tokio::try_join!(async { serv.await.map_err(anyhow::Error::from) }, async {
         ws.await.map_err(anyhow::Error::from)
     })

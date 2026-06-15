@@ -5,6 +5,8 @@ pub struct GameServerConfig {
     pub database_url: String,
     pub ip: String,
     pub port: u64,
+    pub ws_ip: String,
+    pub ws_port: u64,
     pub rust_log_directory_path: String,
     pub auth_server_url: String,
 }

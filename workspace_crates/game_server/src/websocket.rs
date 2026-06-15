@@ -3,7 +3,9 @@ use futures_util::{
     SinkExt,
     stream::{SplitSink, StreamExt},
 };
-use game_server_structs::websocket_communication::{ClientMessage, ClientMessageContent, ServerMessage, UserId};
+use game_server_structs::websocket_communication::{
+    ClientMessage, ClientMessageContent, ServerMessage, UserId,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
 use std::{
@@ -18,7 +20,9 @@ use tokio::{
 use tokio_tungstenite::{
     WebSocketStream, accept_async, accept_hdr_async,
     tungstenite::{
-        self, Message, handshake::server::{Request, Response}, protocol::{CloseFrame, frame::coding::CloseCode}
+        self, Message,
+        handshake::server::{Request, Response},
+        protocol::{CloseFrame, frame::coding::CloseCode},
     },
 };
 use tracing::{debug, error, info, instrument, warn};
@@ -30,15 +34,14 @@ pub struct AppState {
     pub db_pool: Pool<Postgres>,
 }
 
-
 #[instrument]
-pub async fn ws(db_pool: Pool<Postgres>) -> Result<()> {
+pub async fn ws(db_pool: Pool<Postgres>, ip: String, port: u64) -> Result<()> {
     let app_state = AppState {
         connected_clients: Arc::new(Mutex::new(HashMap::new())),
         match_queue: Arc::new(Mutex::new(VecDeque::new())),
         db_pool: db_pool.clone(),
     };
-    let address = "127.0.0.1:9002";
+    let address = format!("{ip}:{port}");
     let listener = TcpListener::bind(&address)
         .await
         .expect(&format!("Couldn't bind to {address}"));
@@ -66,7 +69,6 @@ pub async fn ws(db_pool: Pool<Postgres>) -> Result<()> {
 
     Ok(())
 }
-
 
 pub async fn handle_connection(
     mut shutdown_rx: broadcast::Receiver<()>,
@@ -146,7 +148,7 @@ pub async fn handle_connection(
                 // Send a graceful close frame to the client
                 let close_frame = tungstenite::protocol::Message::Close(None);
                 let _ = ws_write.send(close_frame).await;
-                break; 
+                break;
             }
         }
     }
