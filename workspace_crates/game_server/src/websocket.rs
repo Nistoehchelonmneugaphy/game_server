@@ -22,7 +22,7 @@ use tokio_tungstenite::{
         protocol::{CloseFrame, frame::coding::CloseCode},
     },
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -64,6 +64,7 @@ pub enum ServerMessage {
     },
 }
 
+#[instrument]
 pub async fn ws(db_pool: Pool<Postgres>) -> Result<()> {
     let app_state = AppState {
         connected_clients: Arc::new(Mutex::new(HashMap::new())),
@@ -74,7 +75,7 @@ pub async fn ws(db_pool: Pool<Postgres>) -> Result<()> {
     let listener = TcpListener::bind(&address)
         .await
         .expect(&format!("Couldn't bind to {address}"));
-    info!("Listening on {address}");
+    info!("WebSocket server listening on {address}");
     while let Ok((stream, _)) = listener.accept().await {
         let peer = stream
             .peer_addr()

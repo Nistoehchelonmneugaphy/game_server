@@ -25,7 +25,6 @@ use sqlx::{Pool, Postgres};
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    tracing_subscriber::fmt::init();
     let game_server_config = server::config_reader::read_config::<GameServerConfig>(".env".into());
     println!("Starting the game server.");
     let db_pool = sqlx::PgPool::connect(&game_server_config.database_url)
@@ -54,7 +53,10 @@ async fn main() -> anyhow::Result<()> {
         },
     );
     let ws = ws(db_pool_clone_for_ws.clone());
-    todo!(); // try_join ws and serv or something
+    tokio::try_join!(async { serv.await.map_err(anyhow::Error::from) }, async {
+        ws.await.map_err(anyhow::Error::from)
+    })
+    .expect("Couldn't join?!");
     Ok(())
 }
 
