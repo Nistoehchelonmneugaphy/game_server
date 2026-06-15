@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use game_server::{GameServerConfig, ok_or_return_error_http_resp, websocket::ws};
 use game_server_structs::{
     FinalLoginStepError,
@@ -22,7 +23,7 @@ use server::{
 use sqlx::{Pool, Postgres};
 
 #[tokio::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt::init();
     let game_server_config = server::config_reader::read_config::<GameServerConfig>(".env".into());
@@ -53,6 +54,7 @@ async fn main() -> std::io::Result<()> {
         },
     );
     let ws = ws(db_pool_clone_for_ws.clone());
+    todo!(); // try_join ws and serv or something
     Ok(())
 }
 
