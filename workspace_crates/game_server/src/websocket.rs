@@ -77,7 +77,7 @@ pub async fn handle_connection(
     stream: TcpStream,
 ) -> Result<()> {
     let mut cookie = "".to_string();
-    let get_cookie_and_user_id_from_headers = |req: &Request, response: Response| {
+    let get_cookie_from_headers = |req: &Request, response: Response| {
         for (ref header_name, header_value) in req.headers() {
             let header_name_str = header_name.as_str();
             match header_name_str {
@@ -94,7 +94,7 @@ pub async fn handle_connection(
 
         Ok(response)
     };
-    let mut ws_stream = accept_hdr_async(stream, get_cookie_and_user_id_from_headers).await?;
+    let mut ws_stream = accept_hdr_async(stream, get_cookie_from_headers).await?;
     debug!("Cookie: {cookie}");
     let user_id = match validate_cookie(&app_state.db_pool, cookie.clone()).await {
         Ok(Some(id)) => id,
@@ -248,13 +248,20 @@ async fn save_chat_message(
     user_id: UserId,
     message: String,
 ) -> Result<()> {
-    sqlx::query!(
-        "INSERT INTO global_chat_messages (user_id, content) VALUES ($1, $2)",
+    match sqlx::query!(
+        "INSERT INTO global_chat_messages (message_id, user_id, content) VALUES (gen_random_uuid()::text, $1, $2)",
         user_id.0,
         message
     )
     .execute(db_pool)
-    .await?;
+    .await
+    {
+        Err(e) => {
+            error!("{e:#?}");
+            bail!(e);
+        }
+        _ => {}
+    };
     Ok(())
 }
 
