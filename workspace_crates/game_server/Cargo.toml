@@ -13,3 +13,7 @@ server = { workspace = true }
 game_server_structs = { workspace = true }
 chrono = { workspace = true }
 reqwest = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }

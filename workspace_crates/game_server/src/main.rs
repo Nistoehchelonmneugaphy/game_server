@@ -1,5 +1,5 @@
 
-use game_server::{GameServerConfig, ok_or_return_error_http_resp};
+use game_server::{GameServerConfig, ok_or_return_error_http_resp, websocket::ws};
 use server::{
     BackgroundSpawnTasks, http_stuff::{
         http_request_parsing::HttpRequestData,
@@ -17,6 +17,7 @@ use sqlx::{Pool, Postgres};
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     dotenvy::dotenv().ok();
+    tracing_subscriber::fmt::init();
     let game_server_config = server::config_reader::read_config::<GameServerConfig>(".env".into());
     println!("Starting the game server.");
     let db_pool = sqlx::PgPool::connect(&game_server_config.database_url)
@@ -34,7 +35,8 @@ async fn main() -> std::io::Result<()> {
             route_handler(request_data, db_pool, server_config, game_server_config).await
         })
     });
-    server::run(server_config, env!("CARGO_PKG_VERSION").to_string(), handler, BackgroundSpawnTasks { new_tasks_to_spawn: None, cancellation_token: None }).await
+    let serv = server::run(server_config, env!("CARGO_PKG_VERSION").to_string(), handler, BackgroundSpawnTasks { new_tasks_to_spawn: None, cancellation_token: None });
+    let ws = ws(db_pool.clone());
 }
 
 async fn route_handler(
