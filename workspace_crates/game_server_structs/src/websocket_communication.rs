@@ -32,4 +32,5 @@ pub enum ServerMessage {
     Error {
         message: String,
     },
+    Ping,
 }

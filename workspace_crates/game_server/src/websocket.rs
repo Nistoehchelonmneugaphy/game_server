@@ -142,7 +142,7 @@ pub async fn handle_connection(
         tokio::select! {
             _ = ping_interval.tick() => {
                 debug!("WS Connection ping");
-                if let Err(e) = ws_writer.send(Message::Ping(Vec::new().into())).await {
+                if let Err(e) = handle_send_server_msg(ServerMessage::Ping, &mut ws_writer).await {
                     println!("Failed to send ping: {}", e);
                     break;
                 }
