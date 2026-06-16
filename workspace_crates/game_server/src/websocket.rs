@@ -240,7 +240,9 @@ async fn handle_client_message(
                 for tx in clients {
                     count += 1;
                     debug!("Broadcast #{count}");
-                    tx.send(broadcast.clone()).await.ok();
+                    if let Err(e) = tx.send(broadcast.clone()).await {
+                        error!("Broadcast #{count} error: {e:#?}");
+                    };
                 }
             }
         }
