@@ -15,7 +15,10 @@ use std::{
 };
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::{Mutex, broadcast, mpsc},
+    sync::{
+        Mutex, broadcast,
+        mpsc::{self, Sender},
+    },
 };
 use tokio_tungstenite::{
     WebSocketStream, accept_async, accept_hdr_async,
@@ -51,7 +54,7 @@ pub async fn ws(db_pool: Pool<Postgres>, ip: String, port: u64) -> Result<()> {
     loop {
         tokio::select! {
             Ok((stream, _)) = listener.accept() => {
-                let mut shutdown_rx = shutdown_tx.subscribe();
+                let shutdown_rx = shutdown_tx.subscribe();
                      let peer = stream
             .peer_addr()
             .expect("Connected streams should have a peer addr. Why did this why not have it?");
@@ -198,11 +201,11 @@ async fn handle_receive_client_msg(
         None => {
             info!("Client stream ended for user {user_id:#?}");
             return Ok(ContinueOrBreak::Break);
-        },
+        }
         _anything_else => {
             debug!("{_anything_else:#?}");
             return Ok(ContinueOrBreak::Continue);
-        },
+        }
     }
     Ok(ContinueOrBreak::Continue)
 }
@@ -227,8 +230,12 @@ async fn handle_client_message(
             };
             debug!("Sent message {content}");
             {
-                let clients = app_state.connected_clients.lock().await;
-                for (_, tx) in clients.iter() {
+                let clients: Vec<_> = {
+                    let lock = app_state.connected_clients.lock().await;
+                    lock.values().cloned().collect()
+                };
+
+                for tx in clients {
                     tx.send(broadcast.clone()).await.ok();
                 }
             }
