@@ -12,6 +12,7 @@ use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
     sync::Arc,
+    time::Duration,
 };
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -19,6 +20,7 @@ use tokio::{
         Mutex, broadcast,
         mpsc::{self, Sender},
     },
+    time::interval,
 };
 use tokio_tungstenite::{
     WebSocketStream, accept_async, accept_hdr_async,
@@ -124,7 +126,7 @@ pub async fn handle_connection(
     };
 
     info!("New WebSocket connection (peer, user_id): ({peer:#?}, {user_id:#?})");
-    let (mut ws_write, mut ws_read) = ws_stream.split();
+    let (mut ws_writer, mut ws_reader) = ws_stream.split();
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(32);
     let app_state = app_state.clone();
     '_lock: {
@@ -134,10 +136,19 @@ pub async fn handle_connection(
             .await
             .insert(user_id.clone(), tx);
     }
+    let mut ping_interval = interval(Duration::from_secs(40));
+
     loop {
         tokio::select! {
-            msg = ws_read.next() => {
-                match handle_receive_client_msg(&mut ws_write, app_state.clone(), msg, user_id.clone()).await?{
+            _ = ping_interval.tick() => {
+                debug!("WS Connection ping");
+                if let Err(e) = ws_writer.send(Message::Ping(Vec::new().into())).await {
+                    println!("Failed to send ping: {}", e);
+                    break;
+                }
+            }
+            msg = ws_reader.next() => {
+                match handle_receive_client_msg(&mut ws_writer, app_state.clone(), msg, user_id.clone()).await?{
                 ContinueOrBreak::Continue => {
                     continue;
                 },
@@ -145,12 +156,12 @@ pub async fn handle_connection(
                     break;
                  },
             }},
-            Some(server_msg) = rx.recv() => handle_send_server_msg(server_msg, &mut ws_write).await?,
+            Some(server_msg) = rx.recv() => handle_send_server_msg(server_msg, &mut ws_writer).await?,
             _ = shutdown_rx.recv() => {
                 println!("Closing connection due to server shutdown.");
                 // Send a graceful close frame to the client
                 let close_frame = tungstenite::protocol::Message::Close(None);
-                let _ = ws_write.send(close_frame).await;
+                let _ = ws_writer.send(close_frame).await;
                 break;
             }
         }
