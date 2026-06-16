@@ -230,12 +230,16 @@ async fn handle_client_message(
             };
             debug!("Sent message {content}");
             {
+                debug!("Broadcasting it to connected clients");
                 let clients: Vec<_> = {
                     let lock = app_state.connected_clients.lock().await;
                     lock.values().cloned().collect()
                 };
 
+                let mut count = 0;
                 for tx in clients {
+                    count += 1;
+                    debug!("Broadcast #{count}");
                     tx.send(broadcast.clone()).await.ok();
                 }
             }
