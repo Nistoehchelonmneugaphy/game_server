@@ -195,8 +195,14 @@ async fn handle_receive_client_msg(
             warn!("WebSocket error for user_id {user_id:#?}: {e:#?}");
             return Ok(ContinueOrBreak::Break);
         }
-        None => todo!(),
-        _ => todo!(),
+        None => {
+            info!("Client stream ended for user {user_id:#?}");
+            return Ok(ContinueOrBreak::Break);
+        },
+        _anything_else => {
+            debug!("{_anything_else:#?}");
+            return Ok(ContinueOrBreak::Continue);
+        },
     }
     Ok(ContinueOrBreak::Continue)
 }
