@@ -10,7 +10,7 @@ use game_server_structs::{
         decode_cookie_token,
     },
 };
-use http::StatusCode;
+use http::{HeaderValue, StatusCode};
 use sqlx::{Pool, Postgres};
 use std::{
     collections::{HashMap, VecDeque},
@@ -86,8 +86,7 @@ pub async fn handle_connection(
     stream: TcpStream,
 ) -> Result<()> {
     let mut cookie = None;
-    let cookie_prefix = COOKIE_PREFIX;
-    let get_cookie_from_headers = |req: &Request, response: Response| {
+    let get_cookie_from_headers = |req: &Request, mut response: Response| {
         if let Some(value) = req.headers().get("cookie") {
             if let Ok(s) = value.to_str() {
                 cookie = Some(s.to_string());
@@ -123,6 +122,13 @@ pub async fn handle_connection(
             return Err(resp);
         };
 
+        let Ok(hv) = HeaderValue::from_str(&full_protocol) else {
+            let mut resp = ErrorResponse::new(Some("bad cookie encoding".into()));
+            *resp.status_mut() = StatusCode::UNAUTHORIZED;
+            return Err(resp);
+        };
+        cookie = Some(decoded);
+        response.headers_mut().insert("sec-websocket-protocol", hv);
         Ok(response)
     };
     let mut ws_stream = accept_hdr_async(stream, get_cookie_from_headers).await?;
