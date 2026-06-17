@@ -256,25 +256,7 @@ async fn handle_client_message(
                 user_id: user_id.clone(),
             };
             debug!("Sent message {content}");
-            {
-                let clients: Vec<_> = {
-                    let lock = app_state.connected_clients.lock().await;
-                    lock.values().cloned().collect()
-                };
-                debug!(
-                    "Broadcasting it to connected clients, count {}",
-                    clients.len()
-                );
-
-                let mut count = 0;
-                for tx in clients {
-                    count += 1;
-                    debug!("Broadcast #{count}");
-                    if let Err(e) = tx.send(broadcast.clone()).await {
-                        error!("Broadcast #{count} error: {e:#?}");
-                    };
-                }
-            }
+            broadcast_to_all(broadcast.clone(), app_state.connected_clients.clone());
         }
         ClientMessageContent::JoinMatchmaking => todo!(),
         ClientMessageContent::LeaveMatchmaking => todo!(),
@@ -369,4 +351,38 @@ ORDER BY sub.sent_at ASC"#,
         });
     }
     Ok(msgs)
+}
+
+async fn broadcast_to_all(
+    broadcast: ServerMessage,
+    connected_clients: Arc<Mutex<HashMap<UserId, Sender<ServerMessage>>>>,
+) {
+    {
+        let clients: Vec<(UserId, Sender<ServerMessage>)> = {
+            let lock = connected_clients.lock().await;
+            lock.iter()
+                .map(|(id, tx)| (id.clone(), tx.clone()))
+                .collect()
+        };
+        debug!(
+            "Broadcasting a message to connected clients, count {}",
+            clients.len()
+        );
+
+        let mut count = 0;
+        for (user_id, tx) in clients {
+            count += 1;
+            debug!("Broadcast #{count}");
+            if let Err(e) = tx.try_send(broadcast.clone()) {
+                error!("Broadcast #{count} error: {e:#?}");
+                {
+                    let mut lock = connected_clients.lock().await;
+                    lock.remove(&user_id);
+                    debug!(
+                        "Due to the broadcast failing for this user_id ({user_id:#?}), removed the user from connected list"
+                    );
+                }
+            };
+        }
+    }
 }
