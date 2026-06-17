@@ -261,7 +261,7 @@ async fn handle_client_message(
                 user_id: user_id.clone(),
             };
             debug!("Sent message {content}");
-            broadcast_to_all(broadcast.clone(), app_state.connected_clients.clone());
+            broadcast_to_all(broadcast.clone(), app_state.connected_clients.clone()).await;
         }
         ClientMessageContent::JoinMatchmaking => todo!(),
         ClientMessageContent::LeaveMatchmaking => todo!(),
