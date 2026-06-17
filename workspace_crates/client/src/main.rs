@@ -8,7 +8,7 @@ async fn main() {
     );
     let reqwest_client = reqwest::Client::new();
 
-    let server_cookie = authenticate(
+    let _server_cookie = authenticate(
         &reqwest_client,
         &client_config.auth_server_url,
         &client_config.server_url,

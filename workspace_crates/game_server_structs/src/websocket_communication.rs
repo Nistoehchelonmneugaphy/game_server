@@ -1,4 +1,4 @@
-use bevy_ecs::{event::Event, message::Message, resource::Resource};
+use bevy_ecs::message::Message;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]

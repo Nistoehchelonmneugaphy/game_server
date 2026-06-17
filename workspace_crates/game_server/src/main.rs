@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use game_server::{GameServerConfig, ok_or_return_error_http_resp, websocket::ws};
 use game_server_structs::{
     FinalLoginStepError,
@@ -17,7 +16,6 @@ use server::{
         http_request_parsing::HttpRequestData,
         http_response::{Charset::Utf8, ContentType::ApplicationJson, HttpResponseData, ok},
     },
-    log_tracing::init_tracing,
     server_config::ServerConfig,
 };
 use sqlx::{Pool, Postgres};
@@ -191,7 +189,7 @@ async fn validate_cookie(
     })
 }
 
-async fn view_global_chat(
+async fn _view_global_chat(
     request_data: HttpRequestData,
     db_pool: Pool<Postgres>,
     _server_config: ServerConfig,
@@ -200,8 +198,8 @@ async fn view_global_chat(
     let req: ViewGlobalChatMessageRequest =
         ok_or_return_error_http_resp!(serde_json::from_slice(&request_data.body_bytes));
     let ValidCookieToken {
-        cookie_token,
-        user_id,
+        cookie_token: _,
+        user_id: _,
     } = ok_or_return_error_http_resp!(validate_cookie(db_pool.clone(), req.cookie).await);
     /*
     General todo idea: simplest: just pick last 10 chat messages. Show in ascending order.

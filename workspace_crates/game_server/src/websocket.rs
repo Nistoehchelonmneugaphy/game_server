@@ -7,7 +7,6 @@ use game_server_structs::{
     ChatMessage,
     websocket_communication::{ClientMessage, ClientMessageContent, ServerMessage, UserId},
 };
-use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
 use std::{
     collections::{HashMap, VecDeque},
@@ -24,10 +23,9 @@ use tokio::{
     time::interval,
 };
 use tokio_tungstenite::{
-    WebSocketStream, accept_async, accept_hdr_async,
+    WebSocketStream, accept_hdr_async,
     tungstenite::{
         self,
-        Error::ConnectionClosed,
         Message,
         handshake::server::{Request, Response},
         protocol::{CloseFrame, frame::coding::CloseCode},
