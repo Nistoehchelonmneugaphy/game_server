@@ -26,7 +26,9 @@ use tokio::{
 use tokio_tungstenite::{
     WebSocketStream, accept_async, accept_hdr_async,
     tungstenite::{
-        self, Message,
+        self,
+        Error::ConnectionClosed,
+        Message,
         handshake::server::{Request, Response},
         protocol::{CloseFrame, frame::coding::CloseCode},
     },
@@ -223,14 +225,17 @@ async fn handle_receive_client_msg(
         }
         Some(Err(e)) => {
             warn!("WebSocket error for user_id {user_id:#?}: {e:#?}");
+            remove_from_connected(app_state.connected_clients.clone(), user_id).await;
             return Ok(ContinueOrBreak::Break);
         }
         None => {
             info!("Client stream ended for user {user_id:#?}");
+            remove_from_connected(app_state.connected_clients.clone(), user_id).await;
             return Ok(ContinueOrBreak::Break);
         }
         _anything_else => {
             debug!("{_anything_else:#?}");
+            remove_from_connected(app_state.connected_clients.clone(), user_id).await;
             return Ok(ContinueOrBreak::Continue);
         }
     }
@@ -376,8 +381,7 @@ async fn broadcast_to_all(
             if let Err(e) = tx.try_send(broadcast.clone()) {
                 error!("Broadcast #{count} error: {e:#?}");
                 {
-                    let mut lock = connected_clients.lock().await;
-                    lock.remove(&user_id);
+                    remove_from_connected(connected_clients.clone(), user_id.clone()).await;
                     debug!(
                         "Due to the broadcast failing for this user_id ({user_id:#?}), removed the user from connected list"
                     );
@@ -385,4 +389,13 @@ async fn broadcast_to_all(
             };
         }
     }
+}
+
+async fn remove_from_connected(
+    connected_clients: Arc<Mutex<HashMap<UserId, Sender<ServerMessage>>>>,
+    user_id: UserId,
+) {
+    debug!("Remove {user_id:#?} from connected");
+    let mut lock = connected_clients.lock().await;
+    lock.remove(&user_id);
 }
