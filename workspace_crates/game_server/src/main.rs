@@ -133,7 +133,7 @@ async fn route_handler(
         }
         ServerAction::ViewGlobalChat => {
             send_global_chat_message(request_data, db_pool, server_config, game_server_config).await
-        }
+        },
     }
 }
 

@@ -8,3 +8,5 @@ serde = { workspace = true }
 auth_system_structs = { workspace = true }
 strum = { workspace = true }
 bevy_ecs = {version = "0.18.1", default-features = false}
+http = { workspace = true }
+base64 = { workspace = true }

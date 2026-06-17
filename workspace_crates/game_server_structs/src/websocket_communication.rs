@@ -1,6 +1,20 @@
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
 use bevy_ecs::message::Message;
 use serde::{Deserialize, Serialize};
 
+pub const COOKIE_PREFIX: &str = "cookie";
+
+pub fn pack_cookie(cookie: String) -> String {
+    let encoded_cookie = URL_SAFE_NO_PAD.encode(cookie.as_bytes());
+    let encoded_cookie = format!("{COOKIE_PREFIX}{encoded_cookie}");
+    encoded_cookie
+}
+pub fn decode_cookie_token(encoded: &str) -> Option<String> {
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+    let bytes = URL_SAFE_NO_PAD.decode(encoded).ok()?;
+    String::from_utf8(bytes).ok()
+}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct UserId(pub String);
 

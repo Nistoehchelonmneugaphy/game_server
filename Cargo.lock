@@ -934,10 +934,12 @@ name = "game_server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "chrono",
  "dotenvy",
  "futures-util",
  "game_server_structs",
+ "http",
  "reqwest",
  "serde",
  "serde_json",
@@ -954,7 +956,9 @@ name = "game_server_structs"
 version = "0.1.0"
 dependencies = [
  "auth_system_structs",
+ "base64",
  "bevy_ecs",
+ "http",
  "serde",
  "strum",
 ]
@@ -1122,9 +1126,9 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "1.4.1"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8be7462df143984c4598a256ef469b251d7d7f9e271135073e78fc535414f3d0"
+checksum = "6970f50e31d6fc17d3fa27329444bfa74e196cf62e95052a3f6fee181dba6425"
 dependencies = [
  "bytes",
  "itoa",

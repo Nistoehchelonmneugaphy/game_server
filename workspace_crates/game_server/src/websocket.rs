@@ -5,8 +5,12 @@ use futures_util::{
 };
 use game_server_structs::{
     ChatMessage,
-    websocket_communication::{ClientMessage, ClientMessageContent, ServerMessage, UserId},
+    websocket_communication::{
+        COOKIE_PREFIX, ClientMessage, ClientMessageContent, ServerMessage, UserId,
+        decode_cookie_token,
+    },
 };
+use http::StatusCode;
 use sqlx::{Pool, Postgres};
 use std::{
     collections::{HashMap, VecDeque},
@@ -25,9 +29,8 @@ use tokio::{
 use tokio_tungstenite::{
     WebSocketStream, accept_hdr_async,
     tungstenite::{
-        self,
-        Message,
-        handshake::server::{Request, Response},
+        self, Message,
+        handshake::server::{ErrorResponse, Request, Response},
         protocol::{CloseFrame, frame::coding::CloseCode},
     },
 };
@@ -82,26 +85,53 @@ pub async fn handle_connection(
     peer: SocketAddr,
     stream: TcpStream,
 ) -> Result<()> {
-    let mut cookie = "".to_string();
+    let mut cookie = None;
+    let cookie_prefix = COOKIE_PREFIX;
     let get_cookie_from_headers = |req: &Request, response: Response| {
-        for (ref header_name, header_value) in req.headers() {
-            let header_name_str = header_name.as_str();
-            match header_name_str {
-                "cookie" => {
-                    cookie = header_value
-                        .clone()
-                        .to_str()
-                        .unwrap_or_default()
-                        .to_string();
-                }
-                _ => {}
+        if let Some(value) = req.headers().get("cookie") {
+            if let Ok(s) = value.to_str() {
+                cookie = Some(s.to_string());
+                // native path — no protocol echo needed
+                return Ok(response);
             }
         }
+
+        let raw_protocols = req
+            .headers()
+            .get_all("sec-websocket-protocol")
+            .iter()
+            .filter_map(|v| v.to_str().ok())
+            .flat_map(|s| s.split(','))
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>();
+
+        let cookie_prefix = COOKIE_PREFIX;
+        let matched = raw_protocols.iter().find_map(|p| {
+            p.strip_prefix(&cookie_prefix)
+                .map(|enc| (p.clone(), enc.to_string()))
+        });
+
+        let Some((full_protocol, encoded)) = matched else {
+            let mut resp = ErrorResponse::new(Some("missing cookie protocol".into()));
+            *resp.status_mut() = StatusCode::UNAUTHORIZED;
+            return Err(resp);
+        };
+        let Some(decoded) = decode_cookie_token(&encoded) else {
+            let mut resp = ErrorResponse::new(Some("bad cookie encoding".into()));
+            *resp.status_mut() = StatusCode::UNAUTHORIZED;
+            return Err(resp);
+        };
 
         Ok(response)
     };
     let mut ws_stream = accept_hdr_async(stream, get_cookie_from_headers).await?;
-    debug!("Cookie: {cookie}");
+    let cookie = match cookie {
+        Some(c) => c,
+        None => bail!("No cookie"),
+    };
+    debug!("Cookie: {cookie:#?}");
+
     let user_id = match validate_cookie(&app_state.db_pool, cookie.clone()).await {
         Ok(Some(id)) => id,
         Ok(None) => {
