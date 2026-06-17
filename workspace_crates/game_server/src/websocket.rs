@@ -131,17 +131,12 @@ pub async fn handle_connection(
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(32);
 
     let app_state = app_state.clone();
-    let latest_chat_messages = get_latest_chat_messages(&app_state.db_pool, 5).await?;
-    for msg in latest_chat_messages {
-        let server_message = ServerMessage::NewGlobalChatMessage {
-            content: msg.content,
-            username: msg.username,
-            user_id: msg.user_id,
-        };
-        handle_send_server_msg(server_message, &mut ws_writer)
-            .await
-            .ok();
-    }
+    match send_latest_chat_messages(&app_state.db_pool, &mut ws_writer).await {
+        Ok(_) => {}
+        Err(e) => {
+            error!("send_latest_chat_messages error: {e:#?}");
+        }
+    };
     '_lock: {
         app_state
             .connected_clients
@@ -170,7 +165,14 @@ pub async fn handle_connection(
                     break;
                  },
             }},
-            Some(server_msg) = rx.recv() => handle_send_server_msg(server_msg, &mut ws_writer).await?,
+            Some(server_msg) = rx.recv() => {
+                match handle_send_server_msg(server_msg, &mut ws_writer).await {
+                    Ok(_) => {},
+                    Err(e) => {
+                        error!("handle_send_server_msg error: {e:#?}");
+                    }
+                }
+            },
             _ = shutdown_rx.recv() => {
                 println!("Closing connection due to server shutdown.");
                 // Send a graceful close frame to the client
@@ -320,6 +322,21 @@ async fn get_username(db_pool: &Pool<Postgres>, user_id: UserId) -> Result<Strin
     Ok(username)
 }
 
+async fn send_latest_chat_messages(
+    db_pool: &Pool<Postgres>,
+    ws_writer: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
+) -> Result<()> {
+    let latest_chat_messages = get_latest_chat_messages(&db_pool, 5).await?;
+    for msg in latest_chat_messages {
+        let server_message = ServerMessage::NewGlobalChatMessage {
+            content: msg.content,
+            username: msg.username,
+            user_id: msg.user_id,
+        };
+        handle_send_server_msg(server_message, ws_writer).await.ok();
+    }
+    Ok(())
+}
 async fn get_latest_chat_messages(
     db_pool: &Pool<Postgres>,
     amount: usize,
