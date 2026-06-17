@@ -3,8 +3,9 @@ use futures_util::{
     SinkExt,
     stream::{SplitSink, StreamExt},
 };
-use game_server_structs::websocket_communication::{
-    ClientMessage, ClientMessageContent, ServerMessage, UserId,
+use game_server_structs::{
+    ChatMessage,
+    websocket_communication::{ClientMessage, ClientMessageContent, ServerMessage, UserId},
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
@@ -128,7 +129,19 @@ pub async fn handle_connection(
     info!("New WebSocket connection (peer, user_id): ({peer:#?}, {user_id:#?})");
     let (mut ws_writer, mut ws_reader) = ws_stream.split();
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(32);
+
     let app_state = app_state.clone();
+    let latest_chat_messages = get_latest_chat_messages(&app_state.db_pool, 5).await?;
+    for msg in latest_chat_messages {
+        let server_message = ServerMessage::NewGlobalChatMessage {
+            content: msg.content,
+            username: msg.username,
+            user_id: msg.user_id,
+        };
+        handle_send_server_msg(server_message, &mut ws_writer)
+            .await
+            .ok();
+    }
     '_lock: {
         app_state
             .connected_clients
@@ -136,6 +149,7 @@ pub async fn handle_connection(
             .await
             .insert(user_id.clone(), tx);
     }
+
     let mut ping_interval = interval(Duration::from_secs(40));
 
     loop {
@@ -241,12 +255,14 @@ async fn handle_client_message(
             };
             debug!("Sent message {content}");
             {
-               
                 let clients: Vec<_> = {
                     let lock = app_state.connected_clients.lock().await;
                     lock.values().cloned().collect()
                 };
-                 debug!("Broadcasting it to connected clients, count {}", clients.len());
+                debug!(
+                    "Broadcasting it to connected clients, count {}",
+                    clients.len()
+                );
 
                 let mut count = 0;
                 for tx in clients {
@@ -302,4 +318,38 @@ async fn get_username(db_pool: &Pool<Postgres>, user_id: UserId) -> Result<Strin
         .await?
         .username;
     Ok(username)
+}
+
+async fn get_latest_chat_messages(
+    db_pool: &Pool<Postgres>,
+    amount: usize,
+) -> Result<Vec<ChatMessage>> {
+    let amount = i64::try_from(amount)?;
+    let messages = sqlx::query!(
+        r#"SELECT 
+    sub.user_id, 
+    u.username, 
+    sub.content, 
+    sub.sent_at 
+FROM (
+    SELECT user_id, content, sent_at
+    FROM global_chat_messages 
+    ORDER BY primary_key DESC 
+    LIMIT $1
+) sub
+INNER JOIN users u ON sub.user_id = u.user_id
+ORDER BY sub.sent_at ASC"#,
+        amount
+    )
+    .fetch_all(db_pool)
+    .await?;
+    let mut msgs = Vec::new();
+    for msg in messages {
+        msgs.push(ChatMessage {
+            content: msg.content,
+            username: msg.username,
+            user_id: UserId(msg.user_id),
+        });
+    }
+    Ok(msgs)
 }

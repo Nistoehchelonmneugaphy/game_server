@@ -1,6 +1,8 @@
 pub mod websocket_communication;
 pub use auth_system_structs;
 
+use crate::websocket_communication::UserId;
+
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct ServerNonceResponse(pub String);
 
@@ -63,6 +65,7 @@ pub struct ViewGlobalChatMessageResponse {
 pub struct ChatMessage {
     pub content: String,
     pub username: String,
+    pub user_id: UserId,
 }
 
 
