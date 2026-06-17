@@ -36,6 +36,44 @@ use tokio_tungstenite::{
 };
 use tracing::{debug, error, info, instrument, warn};
 
+fn retrieve_cookie_from_sec_websocket_protocol(
+    req: &tungstenite::handshake::server::Request,
+) -> core::result::Result<(Option<String>, HeaderValue), http::Response<Option<String>>> {
+    let raw_protocols = req
+        .headers()
+        .get_all("sec-websocket-protocol")
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .flat_map(|s| s.split(','))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>();
+
+    let cookie_prefix = COOKIE_PREFIX;
+    let matched = raw_protocols.iter().find_map(|p| {
+        p.strip_prefix(&cookie_prefix)
+            .map(|enc| (p.clone(), enc.to_string()))
+    });
+
+    let Some((full_protocol, encoded)) = matched else {
+        let mut resp = ErrorResponse::new(Some("missing cookie protocol".into()));
+        *resp.status_mut() = StatusCode::UNAUTHORIZED;
+        return Err(resp);
+    };
+    let Some(decoded) = decode_cookie_token(&encoded) else {
+        let mut resp = ErrorResponse::new(Some("bad cookie encoding".into()));
+        *resp.status_mut() = StatusCode::UNAUTHORIZED;
+        return Err(resp);
+    };
+
+    let Ok(hv) = HeaderValue::from_str(&full_protocol) else {
+        let mut resp = ErrorResponse::new(Some("Could not create error resp".into()));
+        *resp.status_mut() = StatusCode::UNAUTHORIZED;
+        return Err(resp);
+    };
+    return Ok((Some(decoded), hv));
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub connected_clients: Arc<Mutex<HashMap<UserId, mpsc::Sender<ServerMessage>>>>,
@@ -95,39 +133,8 @@ pub async fn handle_connection(
             }
         }
 
-        let raw_protocols = req
-            .headers()
-            .get_all("sec-websocket-protocol")
-            .iter()
-            .filter_map(|v| v.to_str().ok())
-            .flat_map(|s| s.split(','))
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>();
-
-        let cookie_prefix = COOKIE_PREFIX;
-        let matched = raw_protocols.iter().find_map(|p| {
-            p.strip_prefix(&cookie_prefix)
-                .map(|enc| (p.clone(), enc.to_string()))
-        });
-
-        let Some((full_protocol, encoded)) = matched else {
-            let mut resp = ErrorResponse::new(Some("missing cookie protocol".into()));
-            *resp.status_mut() = StatusCode::UNAUTHORIZED;
-            return Err(resp);
-        };
-        let Some(decoded) = decode_cookie_token(&encoded) else {
-            let mut resp = ErrorResponse::new(Some("bad cookie encoding".into()));
-            *resp.status_mut() = StatusCode::UNAUTHORIZED;
-            return Err(resp);
-        };
-
-        let Ok(hv) = HeaderValue::from_str(&full_protocol) else {
-            let mut resp = ErrorResponse::new(Some("bad cookie encoding".into()));
-            *resp.status_mut() = StatusCode::UNAUTHORIZED;
-            return Err(resp);
-        };
-        cookie = Some(decoded);
+        let (retrieved_cookie, hv) = retrieve_cookie_from_sec_websocket_protocol(&req)?;
+        cookie = retrieved_cookie;
         response.headers_mut().insert("sec-websocket-protocol", hv);
         Ok(response)
     };
