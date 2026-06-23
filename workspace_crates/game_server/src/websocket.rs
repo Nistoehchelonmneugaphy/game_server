@@ -22,7 +22,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::{
         Mutex, broadcast,
-        mpsc::{self, Receiver, Sender},
+        mpsc::{self, Sender},
     },
     time::interval,
 };
@@ -93,7 +93,7 @@ pub async fn ws(db_pool: Pool<Postgres>, ip: String, port: u64) -> Result<()> {
     info!("WebSocket server listening on {address}");
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
     let shutdown_rx_for_matchmaker_task = shutdown_tx.subscribe();
-    let (match_tx, match_rx) = tokio::sync::mpsc::channel::<MatchmakingMessage>(100);
+    let (_match_tx, match_rx) = tokio::sync::mpsc::channel::<MatchmakingMessage>(100);
     tokio::spawn(matchmaker_task(shutdown_rx_for_matchmaker_task, match_rx));
     loop {
         tokio::select! {
@@ -507,6 +507,17 @@ async fn matchmaking_inner(
         // 2. Start match process with specified tokens, and retrieve ip and port
         // 3. Send ip and port and the token to each user
         // 4. Users connect and play
+        let token_1 = random_alphanumeric_string(12);
+        let token_2 = random_alphanumeric_string(12);
+
         
+
     }
+}
+
+fn random_alphanumeric_string(length: usize) -> String {
+    use rand::{RngExt, distr::Alphanumeric};
+    let mut rng = rand::rng();
+    let chars: String = (0..=length).map(|_| rng.sample(Alphanumeric) as char).collect();
+    chars
 }

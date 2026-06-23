@@ -927,6 +927,7 @@ dependencies = [
  "futures-util",
  "game_server_structs",
  "http",
+ "rand 0.10.1",
  "reqwest",
  "serde",
  "serde_json",
