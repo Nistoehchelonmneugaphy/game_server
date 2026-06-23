@@ -51,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
             cancellation_token: None,
         },
     );
-    let ws = ws(db_pool_clone_for_ws.clone(), game_server_config.ws_ip, game_server_config.ws_port, game_server_config.match_server_url.clone());
+    let ws = ws(db_pool_clone_for_ws.clone(), game_server_config.ws_ip, game_server_config.ws_port, game_server_config.match_server_url.clone(), game_server_config.path_to_match_executable.clone());
     tokio::try_join!(async { serv.await.map_err(anyhow::Error::from) }, async {
         ws.await.map_err(anyhow::Error::from)
     })

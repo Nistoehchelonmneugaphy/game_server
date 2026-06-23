@@ -10,6 +10,8 @@ pub struct GameServerConfig {
     pub rust_log_directory_path: String,
     pub auth_server_url: String,
     pub match_server_url: String,
+    pub path_to_match_executable: String,
+
 }
 
 

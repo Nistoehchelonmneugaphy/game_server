@@ -86,6 +86,7 @@ pub async fn ws(
     ip: String,
     port: u64,
     match_server_url: String,
+    executable_path: String,
 ) -> Result<()> {
     let app_state = AppState {
         connected_clients: Arc::new(Mutex::new(HashMap::new())),
@@ -100,6 +101,7 @@ pub async fn ws(
     let shutdown_rx_for_matchmaker_task = shutdown_tx.subscribe();
     let (_match_tx, match_rx) = tokio::sync::mpsc::channel::<MatchmakingMessage>(100);
     tokio::spawn(matchmaker_task(
+        executable_path.clone(),
         match_server_url.clone(),
         shutdown_rx_for_matchmaker_task,
         app_state.clone(),
@@ -453,6 +455,7 @@ async fn remove_from_connected(
 }
 
 async fn matchmaker_task(
+    executable_path: String,
     match_server_url: String,
     mut shutdown_rx: broadcast::Receiver<()>,
     app_state: AppState,
@@ -467,12 +470,13 @@ async fn matchmaker_task(
                 break;
             },
             msg = match_rx.recv() => {
-                matchmaking_inner(match_server_url.clone(), app_state.clone(),&mut solo_queue, &mut coop_queue, msg, ).await;
+                matchmaking_inner(executable_path.clone(), match_server_url.clone(), app_state.clone(),&mut solo_queue, &mut coop_queue, msg, ).await;
             }
         }
     }
 }
 async fn matchmaking_inner(
+    executable_path: String,
     match_server_url: String,
     app_state: AppState,
     solo_queue: &mut VecDeque<UserId>,
@@ -503,7 +507,7 @@ async fn matchmaking_inner(
 
     // TODO: Solo queue
 
-    
+
     // Coop queue: let's say two player per match
     const PLAYERS_PER_COOP_MATCH: usize = 2;
     while coop_queue.len() >= PLAYERS_PER_COOP_MATCH {
@@ -524,7 +528,10 @@ async fn matchmaking_inner(
         let token_1 = random_alphanumeric_string(TOKEN_LENGTH);
         let token_2 = random_alphanumeric_string(TOKEN_LENGTH);
 
-        let process = spawn_match_process(vec![token_1.clone(), token_2.clone()]).await;
+        let Ok(process) = spawn_match_process(executable_path.clone(), vec![(player1.clone(), token_1.clone()), (player1.clone(), token_2.clone())]).await else {
+            error!("Could not start process");
+            return;
+        };
         let (user_1_sender, user_2_sender) = {
             let user_1_sender = {
                 let map = app_state.connected_clients.lock().await;
@@ -570,8 +577,11 @@ async fn matchmaking_inner(
 
 struct MatchProcess {
     port: u64,
+    child_process: tokio::process::Child,
 }
-async fn spawn_match_process(player_tokens: Vec<String>) -> MatchProcess {
+async fn spawn_match_process(executable_path: String, player_tokens: Vec<(UserId, String)>) -> Result<MatchProcess, anyhow::Error> {
+    // say, as an example, I start it as $executable_path --players="[{user_id_1, token_string_1}], [{user_id_2, token_string_2}], [{user_id_3, token_string_3}],"
+    // I then expect that the child will return the port number it is running on through STDOUT as "port=1234"
     todo!();
 }
 
