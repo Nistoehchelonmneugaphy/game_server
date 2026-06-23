@@ -458,7 +458,8 @@ async fn matchmaker_task(
     app_state: AppState,
     mut match_rx: tokio::sync::mpsc::Receiver<MatchmakingMessage>,
 ) {
-    let mut queue: VecDeque<(QueueType, UserId)> = VecDeque::new();
+    let mut coop_queue: VecDeque<UserId> = VecDeque::new();
+    let mut solo_queue: VecDeque<UserId> = VecDeque::new();
     loop {
         tokio::select! {
             _ = shutdown_rx.recv() => {
@@ -466,7 +467,7 @@ async fn matchmaker_task(
                 break;
             },
             msg = match_rx.recv() => {
-                matchmaking_inner(match_server_url.clone(), app_state.clone(),&mut queue, msg, ).await;
+                matchmaking_inner(match_server_url.clone(), app_state.clone(),&mut solo_queue, &mut coop_queue, msg, ).await;
             }
         }
     }
@@ -474,7 +475,8 @@ async fn matchmaker_task(
 async fn matchmaking_inner(
     match_server_url: String,
     app_state: AppState,
-    queue: &mut VecDeque<(QueueType, UserId)>,
+    solo_queue: &mut VecDeque<UserId>,
+    coop_queue: &mut VecDeque<UserId>,
     msg: Option<MatchmakingMessage>,
 ) {
     let Some(msg) = msg else {
@@ -484,27 +486,24 @@ async fn matchmaking_inner(
         MatchmakingMessage::Join {
             user_id,
             queue_type,
-        } => {
-            queue.push_back((queue_type.clone(), user_id.clone()));
-        }
+        } => match queue_type {
+            QueueType::Solo => {
+                solo_queue.push_back(user_id.clone());
+            }
+            QueueType::Coop => {
+                coop_queue.push_back(user_id.clone());
+            }
+        },
         MatchmakingMessage::Leave { user_id } => {
             // Remove the user from  the queue. How: Keeping the rest, discard the entry with the specified  leaver's user id.
-            queue.retain(|(_, queue_user_id)| queue_user_id.0 != user_id.0);
+            solo_queue.retain(|queue_user_id| queue_user_id.0 != user_id.0);
+            coop_queue.retain(|queue_user_id| queue_user_id.0 != user_id.0);
         }
     }
 
-    let mut solo_queue = VecDeque::new();
-    let mut coop_queue = VecDeque::new();
-
-    // .drain(..) empties the original queue and yields ownership of the items
-    for (queue_type, user_id) in queue.drain(..) {
-        match queue_type {
-            QueueType::Solo => solo_queue.push_back(user_id),
-            QueueType::Coop => coop_queue.push_back(user_id),
-        }
-    }
     // TODO: Solo queue
 
+    
     // Coop queue: let's say two player per match
     const PLAYERS_PER_COOP_MATCH: usize = 2;
     while coop_queue.len() >= PLAYERS_PER_COOP_MATCH {
