@@ -1,5 +1,5 @@
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use bevy_ecs::message::Message;
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +11,7 @@ pub fn pack_cookie(cookie: String) -> String {
     encoded_cookie
 }
 pub fn decode_cookie_token(encoded: &str) -> Option<String> {
-    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     let bytes = URL_SAFE_NO_PAD.decode(encoded).ok()?;
     String::from_utf8(bytes).ok()
 }
@@ -27,22 +27,25 @@ pub struct ClientMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessageContent {
     SendGlobalChatMessage { content: String },
-    JoinMatchmaking { queue_type: QueueType},
+    JoinMatchmaking { queue_type: QueueType },
     LeaveMatchmaking,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MatchmakingMessage {
-    Join {user_id: UserId,
-    queue_type: QueueType,},
-    Leave { user_id: UserId, }
+    Join {
+        user_id: UserId,
+        queue_type: QueueType,
+    },
+    Leave {
+        user_id: UserId,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum QueueType {
     Solo,
-    Coop
+    Coop,
 }
 
 #[derive(Message, Debug, Clone, Serialize, Deserialize)]
@@ -53,8 +56,7 @@ pub enum ServerMessage {
         user_id: UserId,
     },
     MatchFound {
-        ip: String,
-        port: String,
+        match_url: String,
         player_token: String,
     },
     Error {

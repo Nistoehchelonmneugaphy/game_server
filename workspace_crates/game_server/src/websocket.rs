@@ -81,7 +81,12 @@ pub struct AppState {
 }
 
 #[instrument]
-pub async fn ws(db_pool: Pool<Postgres>, ip: String, port: u64) -> Result<()> {
+pub async fn ws(
+    db_pool: Pool<Postgres>,
+    ip: String,
+    port: u64,
+    match_server_url: String,
+) -> Result<()> {
     let app_state = AppState {
         connected_clients: Arc::new(Mutex::new(HashMap::new())),
         db_pool: db_pool.clone(),
@@ -94,7 +99,12 @@ pub async fn ws(db_pool: Pool<Postgres>, ip: String, port: u64) -> Result<()> {
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
     let shutdown_rx_for_matchmaker_task = shutdown_tx.subscribe();
     let (_match_tx, match_rx) = tokio::sync::mpsc::channel::<MatchmakingMessage>(100);
-    tokio::spawn(matchmaker_task(shutdown_rx_for_matchmaker_task, match_rx));
+    tokio::spawn(matchmaker_task(
+        match_server_url.clone(),
+        shutdown_rx_for_matchmaker_task,
+        app_state.clone(),
+        match_rx,
+    ));
     loop {
         tokio::select! {
             Ok((stream, _)) = listener.accept() => {
@@ -443,7 +453,9 @@ async fn remove_from_connected(
 }
 
 async fn matchmaker_task(
+    match_server_url: String,
     mut shutdown_rx: broadcast::Receiver<()>,
+    app_state: AppState,
     mut match_rx: tokio::sync::mpsc::Receiver<MatchmakingMessage>,
 ) {
     let mut queue: VecDeque<(QueueType, UserId)> = VecDeque::new();
@@ -454,14 +466,16 @@ async fn matchmaker_task(
                 break;
             },
             msg = match_rx.recv() => {
-                matchmaking_inner(msg, &mut queue).await;
+                matchmaking_inner(match_server_url.clone(), app_state.clone(),&mut queue, msg, ).await;
             }
         }
     }
 }
 async fn matchmaking_inner(
-    msg: Option<MatchmakingMessage>,
+    match_server_url: String,
+    app_state: AppState,
     queue: &mut VecDeque<(QueueType, UserId)>,
+    msg: Option<MatchmakingMessage>,
 ) {
     let Some(msg) = msg else {
         return;
@@ -511,14 +525,62 @@ async fn matchmaking_inner(
         let token_1 = random_alphanumeric_string(TOKEN_LENGTH);
         let token_2 = random_alphanumeric_string(TOKEN_LENGTH);
 
-        
+        let process = spawn_match_process(vec![token_1.clone(), token_2.clone()]).await;
+        let (user_1_sender, user_2_sender) = {
+            let user_1_sender = {
+                let map = app_state.connected_clients.lock().await;
+                map.get(&player1).cloned()
+            };
+            let user_2_sender = {
+                let map = app_state.connected_clients.lock().await;
+                map.get(&player2).cloned()
+            };
 
+            if let Some(user_1_sender) = user_1_sender
+                && let Some(user_2_sender) = user_2_sender
+            {
+                (user_1_sender, user_2_sender)
+            } else {
+                debug!("Some user_ senders is None");
+                return;
+            }
+        };
+        let match_url = format!("{match_server_url}{}", process.port);
+        match user_1_sender
+            .send(ServerMessage::MatchFound {
+                match_url: match_url.clone(),
+                player_token: token_1,
+            })
+            .await
+        {
+            Ok(_) => debug!("user_1_sender sent"),
+            Err(e) => error!("user_1_sender error: {e:#?}"),
+        }
+        match user_2_sender
+            .send(ServerMessage::MatchFound {
+                match_url: match_url.clone(),
+                player_token: token_2,
+            })
+            .await
+        {
+            Ok(_) => debug!("user_2_sender sent"),
+            Err(e) => error!("user_2_sender error: {e:#?}"),
+        }
     }
+}
+
+struct MatchProcess {
+    port: u64,
+}
+async fn spawn_match_process(player_tokens: Vec<String>) -> MatchProcess {
+    todo!();
 }
 
 fn random_alphanumeric_string(length: usize) -> String {
     use rand::{RngExt, distr::Alphanumeric};
     let mut rng = rand::rng();
-    let chars: String = (0..=length).map(|_| rng.sample(Alphanumeric) as char).collect();
+    let chars: String = (0..=length)
+        .map(|_| rng.sample(Alphanumeric) as char)
+        .collect();
     chars
 }
