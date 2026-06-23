@@ -6,8 +6,8 @@ use futures_util::{
 use game_server_structs::{
     ChatMessage,
     websocket_communication::{
-        COOKIE_PREFIX, ClientMessage, ClientMessageContent, ServerMessage, UserId,
-        decode_cookie_token,
+        COOKIE_PREFIX, ClientMessage, ClientMessageContent, MatchmakingMessage, QueueType,
+        ServerMessage, UserId, decode_cookie_token,
     },
 };
 use http::{HeaderValue, StatusCode};
@@ -22,7 +22,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::{
         Mutex, broadcast,
-        mpsc::{self, Sender},
+        mpsc::{self, Receiver, Sender},
     },
     time::interval,
 };
@@ -77,7 +77,6 @@ fn retrieve_cookie_from_sec_websocket_protocol(
 #[derive(Clone)]
 pub struct AppState {
     pub connected_clients: Arc<Mutex<HashMap<UserId, mpsc::Sender<ServerMessage>>>>,
-    pub match_queue: Arc<Mutex<VecDeque<UserId>>>,
     pub db_pool: Pool<Postgres>,
 }
 
@@ -85,7 +84,6 @@ pub struct AppState {
 pub async fn ws(db_pool: Pool<Postgres>, ip: String, port: u64) -> Result<()> {
     let app_state = AppState {
         connected_clients: Arc::new(Mutex::new(HashMap::new())),
-        match_queue: Arc::new(Mutex::new(VecDeque::new())),
         db_pool: db_pool.clone(),
     };
     let address = format!("{ip}:{port}");
@@ -94,7 +92,9 @@ pub async fn ws(db_pool: Pool<Postgres>, ip: String, port: u64) -> Result<()> {
         .expect(&format!("Couldn't bind to {address}"));
     info!("WebSocket server listening on {address}");
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
-
+    let shutdown_rx_for_matchmaker_task = shutdown_tx.subscribe();
+    let (match_tx, match_rx) = tokio::sync::mpsc::channel::<MatchmakingMessage>(100);
+    tokio::spawn(matchmaker_task(shutdown_rx_for_matchmaker_task, match_rx));
     loop {
         tokio::select! {
             Ok((stream, _)) = listener.accept() => {
@@ -225,6 +225,7 @@ pub async fn handle_connection(
             }
         }
     }
+
     Ok(())
 }
 
@@ -304,7 +305,7 @@ async fn handle_client_message(
             debug!("Sent message {content}");
             broadcast_to_all(broadcast.clone(), app_state.connected_clients.clone()).await;
         }
-        ClientMessageContent::JoinMatchmaking => todo!(),
+        ClientMessageContent::JoinMatchmaking { queue_type: _ } => todo!(),
         ClientMessageContent::LeaveMatchmaking => todo!(),
     }
     Ok(())
@@ -439,4 +440,73 @@ async fn remove_from_connected(
     debug!("Remove {user_id:#?} from connected");
     let mut lock = connected_clients.lock().await;
     lock.remove(&user_id);
+}
+
+async fn matchmaker_task(
+    mut shutdown_rx: broadcast::Receiver<()>,
+    mut match_rx: tokio::sync::mpsc::Receiver<MatchmakingMessage>,
+) {
+    let mut queue: VecDeque<(QueueType, UserId)> = VecDeque::new();
+    loop {
+        tokio::select! {
+            _ = shutdown_rx.recv() => {
+                println!("Matchmaker shutting down");
+                break;
+            },
+            msg = match_rx.recv() => {
+                matchmaking_inner(msg, &mut queue).await;
+            }
+        }
+    }
+}
+async fn matchmaking_inner(
+    msg: Option<MatchmakingMessage>,
+    queue: &mut VecDeque<(QueueType, UserId)>,
+) {
+    let Some(msg) = msg else {
+        return;
+    };
+    match msg {
+        MatchmakingMessage::Join {
+            user_id,
+            queue_type,
+        } => {
+            queue.push_back((queue_type.clone(), user_id.clone()));
+        }
+        MatchmakingMessage::Leave { user_id } => {
+            // Remove the user from  the queue. How: Keeping the rest, discard the entry with the specified  leaver's user id.
+            queue.retain(|(_, queue_user_id)| queue_user_id.0 != user_id.0);
+        }
+    }
+
+    let mut solo_queue = VecDeque::new();
+    let mut coop_queue = VecDeque::new();
+
+    // .drain(..) empties the original queue and yields ownership of the items
+    for (queue_type, user_id) in queue.drain(..) {
+        match queue_type {
+            QueueType::Solo => solo_queue.push_back(user_id),
+            QueueType::Coop => coop_queue.push_back(user_id),
+        }
+    }
+    // TODO: Solo queue
+
+    // Coop queue: let's say two player per match
+    const PLAYERS_PER_COOP_MATCH: usize = 2;
+    while coop_queue.len() >= PLAYERS_PER_COOP_MATCH {
+        let Some(player1) = coop_queue.remove(0) else {
+            debug!("Coop queue none");
+            return;
+        };
+        let Some(player2) = coop_queue.remove(0) else {
+            debug!("Coop queue none");
+            return;
+        };
+        // So, what I am going to do:
+        // 1. generate a random string token for each player (used in the match on each input from player to ensure the user is authorized)
+        // 2. Start match process with specified tokens, and retrieve ip and port
+        // 3. Send ip and port and the token to each user
+        // 4. Users connect and play
+        
+    }
 }

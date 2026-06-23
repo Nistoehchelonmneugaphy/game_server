@@ -27,8 +27,22 @@ pub struct ClientMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessageContent {
     SendGlobalChatMessage { content: String },
-    JoinMatchmaking,
+    JoinMatchmaking { queue_type: QueueType},
     LeaveMatchmaking,
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum MatchmakingMessage {
+    Join {user_id: UserId,
+    queue_type: QueueType,},
+    Leave { user_id: UserId, }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum QueueType {
+    Solo,
+    Coop
 }
 
 #[derive(Message, Debug, Clone, Serialize, Deserialize)]
