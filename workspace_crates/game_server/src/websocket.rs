@@ -507,8 +507,9 @@ async fn matchmaking_inner(
         // 2. Start match process with specified tokens, and retrieve ip and port
         // 3. Send ip and port and the token to each user
         // 4. Users connect and play
-        let token_1 = random_alphanumeric_string(12);
-        let token_2 = random_alphanumeric_string(12);
+        const TOKEN_LENGTH: usize = 24;
+        let token_1 = random_alphanumeric_string(TOKEN_LENGTH);
+        let token_2 = random_alphanumeric_string(TOKEN_LENGTH);
 
         
 
