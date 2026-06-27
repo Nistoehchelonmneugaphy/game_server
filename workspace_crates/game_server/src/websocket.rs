@@ -11,6 +11,7 @@ use game_server_structs::{
     },
 };
 use http::{HeaderValue, StatusCode};
+use match_server::FromGameServer;
 use sqlx::{Pool, Postgres};
 use std::{
     collections::{HashMap, VecDeque},
@@ -39,19 +40,20 @@ use tracing::{debug, error, info, instrument, warn};
 #[derive(Clone)]
 pub struct AppState {
     pub connected_clients: Arc<Mutex<HashMap<UserId, mpsc::Sender<ServerMessage>>>>,
+    pub matches: Arc<Mutex<Vec<MatchServer>>>,
     pub db_pool: Pool<Postgres>,
 }
-#[derive(Clone)]
-pub struct MatchCommsState {
-    pub connected_match_servers: Arc<Mutex<HashMap<UserId, mpsc::Sender<ServerMessage>>>>,
-    pub db_pool: Pool<Postgres>,
+pub struct MatchServer {
+    pub token: String,
+    pub sender: tokio::sync::mpsc::Sender<FromGameServer>,
 }
 
-pub async fn communication_with_match_servers(db_pool: Pool<Postgres>, ip: String, port: u64) {
-    let comms_state = MatchCommsState {
-        connected_match_servers: Arc::new(Mutex::new(HashMap::new())),
-        db_pool: db_pool.clone(),
-    };
+pub async fn communication_with_match_servers(
+    db_pool: Pool<Postgres>,
+    app_state: &AppState,
+    ip: String,
+    port: u64,
+) {
     let address = format!("{ip}:{port}");
     let listener = TcpListener::bind(&address)
         .await
@@ -67,7 +69,7 @@ pub async fn communication_with_match_servers(db_pool: Pool<Postgres>, ip: Strin
             .expect("Connected streams should have a peer addr. Why did this why not have it?");
                     info!("Peer address: {}", peer);
 
-                 tokio::spawn(handle_match_server_connection(shutdown_rx, comms_state.clone(), peer, stream));
+                 tokio::spawn(handle_match_server_connection(shutdown_rx, app_state.clone(), peer, stream));
             },
             _ = server::shutdown_signal::shutdown_signal() => {
                 info!("Shutdown signal");
@@ -78,14 +80,6 @@ pub async fn communication_with_match_servers(db_pool: Pool<Postgres>, ip: Strin
     }
 }
 
-pub async fn handle_match_server_connection(
-    mut shutdown_rx: broadcast::Receiver<()>,
-    state: MatchCommsState,
-    peer: SocketAddr,
-    stream: TcpStream,
-) -> Result<()> {
-    Ok(())
-}
 #[instrument]
 pub async fn ws(
     db_pool: Pool<Postgres>,
@@ -96,6 +90,7 @@ pub async fn ws(
 ) -> Result<()> {
     let app_state = AppState {
         connected_clients: Arc::new(Mutex::new(HashMap::new())),
+        matches: Arc::new(Mutex::new(Vec::new())),
         db_pool: db_pool.clone(),
     };
     let address = format!("{ip}:{port}");
@@ -137,7 +132,7 @@ pub async fn ws(
 
 pub fn try_to_get_cookie_from_headers(req: &Request) -> Option<String> {
     let mut cookie = None;
-    if let Some(value) = req.headers().get("cookie") {
+    if let Some(value) = req.headers().get(COOKIE_PREFIX) {
         if let Ok(s) = value.to_str() {
             cookie = Some(s.to_string());
             // native path — no protocol echo needed
@@ -147,25 +142,67 @@ pub fn try_to_get_cookie_from_headers(req: &Request) -> Option<String> {
     cookie
 }
 
+pub struct CookieOrTokenRetrieval {
+    cookie_or_token: Option<String>,
+}
+impl CookieOrTokenRetrieval {
+    fn handle(
+        &mut self,
+        req: &Request,
+        mut response: Response,
+    ) -> Result<Response, http::Response<Option<String>>> {
+        self.cookie_or_token = try_to_get_cookie_from_headers(req);
+        if self.cookie_or_token.is_some() {
+            return Ok(response);
+        }
+        let (retrieved_cookie, hv) = retrieve_cookie_from_sec_websocket_protocol(&req)?;
+        self.cookie_or_token = retrieved_cookie;
+        response.headers_mut().insert("sec-websocket-protocol", hv);
+        Ok(response)
+    }
+}
+pub async fn handle_match_server_connection(
+    mut shutdown_rx: broadcast::Receiver<()>,
+    state: AppState,
+    peer: SocketAddr,
+    stream: TcpStream,
+) -> Result<()> {
+    let mut token = CookieOrTokenRetrieval {
+        cookie_or_token: None,
+    };
+    let get_token_from_headers = |req: &Request, response: Response| token.handle(req, response);
+    let mut ws_stream = accept_hdr_async(stream, get_token_from_headers).await?;
+    let token = match token.cookie_or_token.take() {
+        Some(c) => c,
+        None => bail!("No token"),
+    };
+    debug!("Token: {token:#?}");
+    let to_match_sender = validate_token(state.clone(), token).await?;
+    
+    Ok(())
+}
+pub async fn validate_token(
+    app_state: AppState,
+    token: String,
+) -> Result<tokio::sync::mpsc::Sender<match_server::FromGameServer>> {
+    let matches = app_state.matches.lock().await;
+    if let Some(m) = matches.iter().find(|m| m.token == "haha321") {
+        return Ok(m.sender.clone());
+    }
+    bail!("Token validation error");
+}
 pub async fn handle_connection(
     mut shutdown_rx: broadcast::Receiver<()>,
     app_state: AppState,
     peer: SocketAddr,
     stream: TcpStream,
 ) -> Result<()> {
-    let mut cookie = None;
-    let get_cookie_from_headers = |req: &Request, mut response: Response| {
-        cookie = try_to_get_cookie_from_headers(req);
-        if cookie.is_some() {
-            return Ok(response);
-        }
-        let (retrieved_cookie, hv) = retrieve_cookie_from_sec_websocket_protocol(&req)?;
-        cookie = retrieved_cookie;
-        response.headers_mut().insert("sec-websocket-protocol", hv);
-        Ok(response)
+    let mut cookie = CookieOrTokenRetrieval {
+        cookie_or_token: None,
     };
+    let get_cookie_from_headers = |req: &Request, response: Response| cookie.handle(req, response);
     let mut ws_stream = accept_hdr_async(stream, get_cookie_from_headers).await?;
-    let cookie = match cookie {
+    let cookie = match cookie.cookie_or_token.take() {
         Some(c) => c,
         None => bail!("No cookie"),
     };

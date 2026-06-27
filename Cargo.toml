@@ -23,6 +23,7 @@ reqwest = { version = "0.13.4", features = ["json", "cookies"] }
 anyhow = { version = "1.0.102" }
 server = { git = "ssh://git@github.com/Aeroel/server_2_only.git"}
 auth_system_structs = { git = "ssh://git@github.com/Aeroel/auth_system.git"}
+match_server = { git = "ssh://git@github.com/Aeroel/match_system.git"}
 chrono = { version = "0.4.44", features = [ "serde" ] }
 tokio-tungstenite = "0.29.0"
 futures-util = "0.3.32"
