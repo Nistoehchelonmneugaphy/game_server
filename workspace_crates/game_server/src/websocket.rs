@@ -36,57 +36,63 @@ use tokio_tungstenite::{
 };
 use tracing::{debug, error, info, instrument, warn};
 
-fn retrieve_cookie_from_sec_websocket_protocol(
-    req: &tungstenite::handshake::server::Request,
-) -> core::result::Result<(Option<String>, HeaderValue), http::Response<Option<String>>> {
-    let raw_protocols = req
-        .headers()
-        .get_all("sec-websocket-protocol")
-        .iter()
-        .filter_map(|v| v.to_str().ok())
-        .flat_map(|s| s.split(','))
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>();
-
-    let cookie_prefix = COOKIE_PREFIX;
-    let matched = raw_protocols.iter().find_map(|p| {
-        p.strip_prefix(&cookie_prefix)
-            .map(|enc| (p.clone(), enc.to_string()))
-    });
-
-    let Some((full_protocol, encoded)) = matched else {
-        let mut resp = ErrorResponse::new(Some("missing cookie protocol".into()));
-        *resp.status_mut() = StatusCode::UNAUTHORIZED;
-        return Err(resp);
-    };
-    let Some(decoded) = decode_cookie_token(&encoded) else {
-        let mut resp = ErrorResponse::new(Some("bad cookie encoding".into()));
-        *resp.status_mut() = StatusCode::UNAUTHORIZED;
-        return Err(resp);
-    };
-
-    let Ok(hv) = HeaderValue::from_str(&full_protocol) else {
-        let mut resp = ErrorResponse::new(Some("Could not create error resp".into()));
-        *resp.status_mut() = StatusCode::UNAUTHORIZED;
-        return Err(resp);
-    };
-    return Ok((Some(decoded), hv));
-}
-
 #[derive(Clone)]
 pub struct AppState {
     pub connected_clients: Arc<Mutex<HashMap<UserId, mpsc::Sender<ServerMessage>>>>,
     pub db_pool: Pool<Postgres>,
 }
+#[derive(Clone)]
+pub struct MatchCommsState {
+    pub connected_match_servers: Arc<Mutex<HashMap<UserId, mpsc::Sender<ServerMessage>>>>,
+    pub db_pool: Pool<Postgres>,
+}
 
+pub async fn communication_with_match_servers(db_pool: Pool<Postgres>, ip: String, port: u64) {
+    let comms_state = MatchCommsState {
+        connected_match_servers: Arc::new(Mutex::new(HashMap::new())),
+        db_pool: db_pool.clone(),
+    };
+    let address = format!("{ip}:{port}");
+    let listener = TcpListener::bind(&address)
+        .await
+        .expect(&format!("Couldn't bind to {address}"));
+    info!("WebSocket match comms server listening on {address}");
+    let (shutdown_tx, _) = broadcast::channel::<()>(1);
+    loop {
+        tokio::select! {
+            Ok((stream, _)) = listener.accept() => {
+                let shutdown_rx = shutdown_tx.subscribe();
+                     let peer = stream
+            .peer_addr()
+            .expect("Connected streams should have a peer addr. Why did this why not have it?");
+                    info!("Peer address: {}", peer);
+
+                 tokio::spawn(handle_match_server_connection(shutdown_rx, comms_state.clone(), peer, stream));
+            },
+            _ = server::shutdown_signal::shutdown_signal() => {
+                info!("Shutdown signal");
+                shutdown_tx.send(()).ok();
+                break;
+            }
+        }
+    }
+}
+
+pub async fn handle_match_server_connection(
+    mut shutdown_rx: broadcast::Receiver<()>,
+    state: MatchCommsState,
+    peer: SocketAddr,
+    stream: TcpStream,
+) -> Result<()> {
+    Ok(())
+}
 #[instrument]
 pub async fn ws(
     db_pool: Pool<Postgres>,
     ip: String,
     port: u64,
     match_server_url: String,
-    executable_path: String,
+    match_executable_path: String,
 ) -> Result<()> {
     let app_state = AppState {
         connected_clients: Arc::new(Mutex::new(HashMap::new())),
@@ -101,7 +107,7 @@ pub async fn ws(
     let shutdown_rx_for_matchmaker_task = shutdown_tx.subscribe();
     let (_match_tx, match_rx) = tokio::sync::mpsc::channel::<MatchmakingMessage>(100);
     tokio::spawn(matchmaker_task(
-        executable_path.clone(),
+        match_executable_path.clone(),
         match_server_url.clone(),
         shutdown_rx_for_matchmaker_task,
         app_state.clone(),
@@ -129,6 +135,18 @@ pub async fn ws(
     Ok(())
 }
 
+pub fn try_to_get_cookie_from_headers(req: &Request) -> Option<String> {
+    let mut cookie = None;
+    if let Some(value) = req.headers().get("cookie") {
+        if let Ok(s) = value.to_str() {
+            cookie = Some(s.to_string());
+            // native path — no protocol echo needed
+            return cookie;
+        }
+    }
+    cookie
+}
+
 pub async fn handle_connection(
     mut shutdown_rx: broadcast::Receiver<()>,
     app_state: AppState,
@@ -137,14 +155,10 @@ pub async fn handle_connection(
 ) -> Result<()> {
     let mut cookie = None;
     let get_cookie_from_headers = |req: &Request, mut response: Response| {
-        if let Some(value) = req.headers().get("cookie") {
-            if let Ok(s) = value.to_str() {
-                cookie = Some(s.to_string());
-                // native path — no protocol echo needed
-                return Ok(response);
-            }
+        cookie = try_to_get_cookie_from_headers(req);
+        if cookie.is_some() {
+            return Ok(response);
         }
-
         let (retrieved_cookie, hv) = retrieve_cookie_from_sec_websocket_protocol(&req)?;
         cookie = retrieved_cookie;
         response.headers_mut().insert("sec-websocket-protocol", hv);
@@ -507,7 +521,6 @@ async fn matchmaking_inner(
 
     // TODO: Solo queue
 
-
     // Coop queue: let's say two player per match
     const PLAYERS_PER_COOP_MATCH: usize = 2;
     while coop_queue.len() >= PLAYERS_PER_COOP_MATCH {
@@ -528,7 +541,15 @@ async fn matchmaking_inner(
         let token_1 = random_alphanumeric_string(TOKEN_LENGTH);
         let token_2 = random_alphanumeric_string(TOKEN_LENGTH);
 
-        let Ok(process) = spawn_match_process(executable_path.clone(), vec![(player1.clone(), token_1.clone()), (player1.clone(), token_2.clone())]).await else {
+        let Ok(process) = spawn_match_process(
+            executable_path.clone(),
+            vec![
+                (player1.clone(), token_1.clone()),
+                (player1.clone(), token_2.clone()),
+            ],
+        )
+        .await
+        else {
             error!("Could not start process");
             return;
         };
@@ -579,7 +600,10 @@ struct MatchProcess {
     port: u64,
     child_process: tokio::process::Child,
 }
-async fn spawn_match_process(executable_path: String, player_tokens: Vec<(UserId, String)>) -> Result<MatchProcess, anyhow::Error> {
+async fn spawn_match_process(
+    executable_path: String,
+    player_tokens: Vec<(UserId, String)>,
+) -> Result<MatchProcess, anyhow::Error> {
     // say, as an example, I start it as $executable_path --players="[{user_id_1, token_string_1}], [{user_id_2, token_string_2}], [{user_id_3, token_string_3}],"
     // I then expect that the child will return the port number it is running on through STDOUT as "port=1234"
     todo!();
@@ -592,4 +616,42 @@ fn random_alphanumeric_string(length: usize) -> String {
         .map(|_| rng.sample(Alphanumeric) as char)
         .collect();
     chars
+}
+
+fn retrieve_cookie_from_sec_websocket_protocol(
+    req: &tungstenite::handshake::server::Request,
+) -> core::result::Result<(Option<String>, HeaderValue), http::Response<Option<String>>> {
+    let raw_protocols = req
+        .headers()
+        .get_all("sec-websocket-protocol")
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .flat_map(|s| s.split(','))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>();
+
+    let cookie_prefix = COOKIE_PREFIX;
+    let matched = raw_protocols.iter().find_map(|p| {
+        p.strip_prefix(&cookie_prefix)
+            .map(|enc| (p.clone(), enc.to_string()))
+    });
+
+    let Some((full_protocol, encoded)) = matched else {
+        let mut resp = ErrorResponse::new(Some("missing cookie protocol".into()));
+        *resp.status_mut() = StatusCode::UNAUTHORIZED;
+        return Err(resp);
+    };
+    let Some(decoded) = decode_cookie_token(&encoded) else {
+        let mut resp = ErrorResponse::new(Some("bad cookie encoding".into()));
+        *resp.status_mut() = StatusCode::UNAUTHORIZED;
+        return Err(resp);
+    };
+
+    let Ok(hv) = HeaderValue::from_str(&full_protocol) else {
+        let mut resp = ErrorResponse::new(Some("Could not create error resp".into()));
+        *resp.status_mut() = StatusCode::UNAUTHORIZED;
+        return Err(resp);
+    };
+    return Ok((Some(decoded), hv));
 }
