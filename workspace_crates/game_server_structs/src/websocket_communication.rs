@@ -2,6 +2,8 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use bevy_ecs::message::Message;
 use serde::{Deserialize, Serialize};
+use strum::Display;
+
 
 pub const COOKIE_KEY_NAME: &str = "cookie";
 pub const COOKIE_PREFIX: &str = COOKIE_KEY_NAME;
@@ -80,7 +82,7 @@ pub struct MatchPlayer {
     pub token: String,
     pub team: MatchTeam,
 }
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Display,  Clone, Deserialize, Serialize)]
 pub enum MatchTeam {
     Hunter,
     Survivor,
