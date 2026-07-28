@@ -11,8 +11,6 @@ pub struct GameServerConfig {
     pub auth_server_url: String,
     pub match_server_url: String,
     pub path_to_match_executable: String,
-    pub communication_with_match_servers_ws_ip: String,
-    pub communication_with_match_servers_ws_port: u64,
 }
 
 #[macro_export]
