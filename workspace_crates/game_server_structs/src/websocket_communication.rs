@@ -76,7 +76,7 @@ pub struct MatchProcess {
     pub child_process: tokio::process::Child,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MatchPlayer {
     pub user_id: UserId,
     pub token: String,

@@ -599,6 +599,7 @@ async fn matchmaking_inner(
             error!("Could not start process");
             return;
         };
+        let port = process.port;
         let (user_1_sender, user_2_sender) = {
             let user_1_sender = {
                 let map = app_state.connected_clients.lock().await;
@@ -618,7 +619,7 @@ async fn matchmaking_inner(
                 return;
             }
         };
-        let match_url = format!("{match_server_url}/{}", process.port);
+        let match_url = format!("{match_server_url}/{}", port);
         match user_1_sender
             .send(ServerMessage::MatchFound {
                 match_url: match_url.clone(),
@@ -650,7 +651,9 @@ async fn spawn_match_process(
 ) -> Result<MatchProcess, anyhow::Error> {
     // say, as an example, I start it as $executable_path --players="[{user_id_1, token_string_1}], [{user_id_2, token_string_2}], [{user_id_3, token_string_3}],"
     // I then expect that the child will return the port number it is running on through STDOUT as "port=1234"
+    
     todo!();
+
 }
 
 fn random_alphanumeric_string(length: usize) -> String {
