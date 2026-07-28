@@ -4,10 +4,8 @@ use futures_util::{
     stream::{SplitSink, StreamExt},
 };
 use game_server_structs::{
-    ChatMessage,
-    websocket_communication::{
-        COOKIE_PREFIX, ClientMessage, ClientMessageContent, MatchmakingMessage, QueueType,
-        ServerMessage, UserId, decode_cookie_token,
+    ChatMessage, websocket_communication::{
+        COOKIE_PREFIX, ClientMessage, ClientMessageContent, MatchPlayer, MatchProcess, MatchTeam, MatchmakingMessage, QueueType, ServerMessage, UserId, decode_cookie_token,
     },
 };
 use http::{HeaderValue, StatusCode};
@@ -625,6 +623,7 @@ async fn matchmaking_inner(
             .send(ServerMessage::MatchFound {
                 match_url: match_url.clone(),
                 player_token: token_1,
+                team: team_1.clone(),
             })
             .await
         {
@@ -635,6 +634,7 @@ async fn matchmaking_inner(
             .send(ServerMessage::MatchFound {
                 match_url: match_url.clone(),
                 player_token: token_2,
+                team: team_2.clone(),
             })
             .await
         {
@@ -644,22 +644,6 @@ async fn matchmaking_inner(
     }
 }
 
-struct MatchProcess {
-    port: u64,
-    child_process: tokio::process::Child,
-}
-
-#[derive(Debug, Clone)]
-struct MatchPlayer {
-    user_id: UserId,
-    token: String,
-    team: MatchTeam,
-}
-#[derive(Debug, Clone)]
-enum MatchTeam {
-    Hunter,
-    Survivor,
-}
 async fn spawn_match_process(
     executable_path: String,
     player: Vec<MatchPlayer>,

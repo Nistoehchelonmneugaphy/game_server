@@ -59,9 +59,29 @@ pub enum ServerMessage {
     MatchFound {
         match_url: String,
         player_token: String,
+        team: MatchTeam,
     },
     Error {
         message: String,
     },
     Ping,
+}
+
+
+
+pub struct MatchProcess {
+    pub port: u64,
+    pub child_process: tokio::process::Child,
+}
+
+#[derive(Debug, Clone)]
+pub struct MatchPlayer {
+    pub user_id: UserId,
+    pub token: String,
+    pub team: MatchTeam,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum MatchTeam {
+    Hunter,
+    Survivor,
 }
