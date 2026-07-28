@@ -649,8 +649,9 @@ async fn spawn_match_process(
     executable_path: String,
     player: Vec<MatchPlayer>,
 ) -> Result<MatchProcess, anyhow::Error> {
-    // say, as an example, I start it as $executable_path --players="[{user_id_1, token_string_1}], [{user_id_2, token_string_2}], [{user_id_3, token_string_3}],"
-    // I then expect that the child will return the port number it is running on through STDOUT as "port=1234"
+    /*
+    Start match server
+     */
     
     todo!();
 
