@@ -609,7 +609,7 @@ async fn matchmaking_inner(
                 return;
             }
         };
-        let match_url = format!("{match_server_url}{}", process.port);
+        let match_url = format!("{match_server_url}/{}", process.port);
         match user_1_sender
             .send(ServerMessage::MatchFound {
                 match_url: match_url.clone(),
