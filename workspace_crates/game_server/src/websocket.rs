@@ -178,7 +178,7 @@ pub async fn handle_match_server_connection(
     };
     debug!("Token: {token:#?}");
     let to_match_sender = validate_token(state.clone(), token).await?;
-    
+
     Ok(())
 }
 pub async fn validate_token(
@@ -512,8 +512,8 @@ async fn matchmaker_task(
     app_state: AppState,
     mut match_rx: tokio::sync::mpsc::Receiver<MatchmakingMessage>,
 ) {
-    let mut coop_queue: VecDeque<UserId> = VecDeque::new();
-    let mut solo_queue: VecDeque<UserId> = VecDeque::new();
+    let mut survivor_queue: VecDeque<UserId> = VecDeque::new();
+    let mut hunter_queue: VecDeque<UserId> = VecDeque::new();
     loop {
         tokio::select! {
             _ = shutdown_rx.recv() => {
@@ -521,7 +521,7 @@ async fn matchmaker_task(
                 break;
             },
             msg = match_rx.recv() => {
-                matchmaking_inner(executable_path.clone(), match_server_url.clone(), app_state.clone(),&mut solo_queue, &mut coop_queue, msg, ).await;
+                matchmaking_inner(executable_path.clone(), match_server_url.clone(), app_state.clone(),&mut hunter_queue, &mut survivor_queue, msg, ).await;
             }
         }
     }
@@ -530,8 +530,8 @@ async fn matchmaking_inner(
     executable_path: String,
     match_server_url: String,
     app_state: AppState,
-    solo_queue: &mut VecDeque<UserId>,
-    coop_queue: &mut VecDeque<UserId>,
+    hunter_queue: &mut VecDeque<UserId>,
+    survivor_queue: &mut VecDeque<UserId>,
     msg: Option<MatchmakingMessage>,
 ) {
     let Some(msg) = msg else {
@@ -542,31 +542,31 @@ async fn matchmaking_inner(
             user_id,
             queue_type,
         } => match queue_type {
-            QueueType::Solo => {
-                solo_queue.push_back(user_id.clone());
+            QueueType::Hunter => {
+                hunter_queue.push_back(user_id.clone());
             }
-            QueueType::Coop => {
-                coop_queue.push_back(user_id.clone());
+            QueueType::Survivor => {
+                survivor_queue.push_back(user_id.clone());
             }
         },
         MatchmakingMessage::Leave { user_id } => {
             // Remove the user from  the queue. How: Keeping the rest, discard the entry with the specified  leaver's user id.
-            solo_queue.retain(|queue_user_id| queue_user_id.0 != user_id.0);
-            coop_queue.retain(|queue_user_id| queue_user_id.0 != user_id.0);
+            hunter_queue.retain(|queue_user_id| queue_user_id.0 != user_id.0);
+            survivor_queue.retain(|queue_user_id| queue_user_id.0 != user_id.0);
         }
     }
 
-    // TODO: Solo queue
-
-    // Coop queue: let's say two player per match
-    const PLAYERS_PER_COOP_MATCH: usize = 2;
-    while coop_queue.len() >= PLAYERS_PER_COOP_MATCH {
-        let Some(player1) = coop_queue.remove(0) else {
-            debug!("Coop queue none");
+    const SURVIVOR_PLAYERS_PER_MATCH: usize = 1;
+    const HUNTER_PLAYERS_PER_MATCH: usize = 1;
+    while hunter_queue.len() >= HUNTER_PLAYERS_PER_MATCH
+        && survivor_queue.len() >= SURVIVOR_PLAYERS_PER_MATCH
+    {
+        let Some(player_1) = hunter_queue.remove(0) else {
+            debug!("Hunter queue none");
             return;
         };
-        let Some(player2) = coop_queue.remove(0) else {
-            debug!("Coop queue none");
+        let Some(player_2) = survivor_queue.remove(0) else {
+            debug!("Survivor queue none");
             return;
         };
         // So, what I am going to do:
@@ -578,11 +578,22 @@ async fn matchmaking_inner(
         let token_1 = random_alphanumeric_string(TOKEN_LENGTH);
         let token_2 = random_alphanumeric_string(TOKEN_LENGTH);
 
+        let team_1 = MatchTeam::Hunter;
+        let team_2 = MatchTeam::Survivor;
+
         let Ok(process) = spawn_match_process(
             executable_path.clone(),
             vec![
-                (player1.clone(), token_1.clone()),
-                (player1.clone(), token_2.clone()),
+                MatchPlayer {
+                    user_id: player_1.clone(),
+                    token: token_1.clone(),
+                    team: team_1.clone(),
+                },
+                MatchPlayer {
+                    user_id: player_2.clone(),
+                    token: token_2.clone(),
+                    team: team_2.clone(),
+                },
             ],
         )
         .await
@@ -593,11 +604,11 @@ async fn matchmaking_inner(
         let (user_1_sender, user_2_sender) = {
             let user_1_sender = {
                 let map = app_state.connected_clients.lock().await;
-                map.get(&player1).cloned()
+                map.get(&player_1).cloned()
             };
             let user_2_sender = {
                 let map = app_state.connected_clients.lock().await;
-                map.get(&player2).cloned()
+                map.get(&player_2).cloned()
             };
 
             if let Some(user_1_sender) = user_1_sender
@@ -637,9 +648,21 @@ struct MatchProcess {
     port: u64,
     child_process: tokio::process::Child,
 }
+
+#[derive(Debug, Clone)]
+struct MatchPlayer {
+    user_id: UserId,
+    token: String,
+    team: MatchTeam,
+}
+#[derive(Debug, Clone)]
+enum MatchTeam {
+    Hunter,
+    Survivor,
+}
 async fn spawn_match_process(
     executable_path: String,
-    player_tokens: Vec<(UserId, String)>,
+    player: Vec<MatchPlayer>,
 ) -> Result<MatchProcess, anyhow::Error> {
     // say, as an example, I start it as $executable_path --players="[{user_id_1, token_string_1}], [{user_id_2, token_string_2}], [{user_id_3, token_string_3}],"
     // I then expect that the child will return the port number it is running on through STDOUT as "port=1234"

@@ -45,8 +45,8 @@ pub enum MatchmakingMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum QueueType {
-    Solo,
-    Coop,
+    Hunter,
+    Survivor,
 }
 
 #[derive(Message, Debug, Clone, Serialize, Deserialize)]
