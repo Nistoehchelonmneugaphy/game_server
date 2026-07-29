@@ -8,25 +8,25 @@ resolver = "3"
 members = ["workspace_crates/*"]
 
 [workspace.dependencies]
-bevy_ecs = { version = "=0.19.0", default-features = false }
-rand = "0.10.1"
+bevy_ecs = { version = "0.19.0", default-features = false }
+rand = "0.10.2"
 game_server_structs = { path = "workspace_crates/game_server_structs" }
 strum = { version = "0.28.0", features = ["derive"] }
 sqlx = { version = "0.9.0", features = ["migrate", "postgres", "macros", "runtime-tokio", "time", "tls-rustls-aws-lc-rs"] }
-config = "0.15.23"
+config = "0.15.25"
 dotenvy = "0.15.7"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = {version = "1.0.150"}
-tokio = { version = "1.52.3", features = ["full"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = {version = "1.0.151"}
+tokio = { version = "1.53.1", features = ["full"] }
 reqwest = { version = "0.13.4", features = ["json", "cookies"] }
-anyhow = { version = "1.0.102" }
+anyhow = { version = "1.0.104" }
 server = { git = "ssh://git@github.com/Aeroel/server_2_only.git"}
 auth_system_structs = { git = "ssh://git@github.com/Aeroel/auth_system.git"}
 match_server = { git = "ssh://git@github.com/Aeroel/match_system.git"}
-chrono = { version = "0.4.44", features = [ "serde" ] }
-tokio-tungstenite = "0.29.0"
-futures-util = "0.3.32"
+chrono = { version = "0.4.45", features = [ "serde" ] }
+tokio-tungstenite = "0.30.0"
+futures-util = "0.3.33"
 http = { version = "1.4.2"}
-base64 = { version = "0.22.1"}
+base64 = { version = "0.23.0"}
