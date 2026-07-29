@@ -7,7 +7,7 @@ edition = "2024"
 serde = { workspace = true }
 auth_system_structs = { workspace = true }
 strum = { workspace = true }
-bevy_ecs = {version = "0.18.1", default-features = false}
+bevy_ecs = { workspace = true }
 http = { workspace = true }
 base64 = { workspace = true }
 tokio = { workspace = true }
