@@ -11,12 +11,10 @@ use game_server_structs::{
     },
 };
 use server::{
-    BackgroundSpawnTasks,
-    http_stuff::{
+    ServerBuilder, http_stuff::{
         http_request_parsing::HttpRequestData,
         http_response::{Charset::Utf8, ContentType::ApplicationJson, HttpResponseData, ok},
-    },
-    server_config::ServerConfig,
+    }, server_config::ServerConfig,
 };
 use sqlx::{Pool, Postgres};
 
@@ -42,19 +40,10 @@ async fn main() -> anyhow::Result<()> {
             route_handler(request_data, db_pool, server_config, game_server_config).await
         })
     });
-    let serv = server::run(
-        server_config,
-        env!("CARGO_PKG_VERSION").to_string(),
-        handler,
-        BackgroundSpawnTasks {
-            new_tasks_to_spawn: None,
-            cancellation_token: None,
-        },
-    );
+ 
+    let serv = ServerBuilder::new(server_config, env!("CARGO_PKG_VERSION").to_string(), handler).run_handler();
     let ws = ws(db_pool_clone_for_ws.clone(), game_server_config.ws_ip, game_server_config.ws_port, game_server_config.match_server_url.clone(), game_server_config.path_to_match_executable.clone());
-    tokio::try_join!(async { serv.await.map_err(anyhow::Error::from) }, async {
-        ws.await.map_err(anyhow::Error::from)
-    })
+    tokio::try_join!(async { serv.await.map_err(anyhow::Error::from) }, ws)
     .expect("Couldn't join?!");
     Ok(())
 }
@@ -79,7 +68,7 @@ async fn route_handler(
             let nonce = ok_or_return_error_http_resp!(sqlx::query!("INSERT INTO server_nonces (nonce, expires_at) VALUES (gen_random_uuid()::text, $1) RETURNING nonce", chrono::Utc::now().timestamp()).fetch_one(&db_pool).await).nonce;
             let resp = ServerNonceResponse(nonce);
             let bytes = ok_or_return_error_http_resp!(serde_json::to_vec(&resp));
-            return respond(bytes);
+            respond(bytes)
         }
         ServerAction::FinalLoginStep => {
             let req: FinalLoginStepRequest =
@@ -117,14 +106,14 @@ async fn route_handler(
                     let final_resp =
                         FinalLoginStepResponse::Success(FinalLoginStepSuccess { cookie_token });
                     let bytes = ok_or_return_error_http_resp!(serde_json::to_vec(&final_resp));
-                    return respond(bytes);
+                    respond(bytes)
                 }
                 ValidateJoinTokenResponse::Invalid => {
                     let final_resp = FinalLoginStepResponse::Failure(FinalLoginStepError {
                         kind: JoinTokenValidationError,
                     });
                     let bytes = ok_or_return_error_http_resp!(serde_json::to_vec(&final_resp));
-                    return respond(bytes);
+                    respond(bytes)
                 }
             }
         }
@@ -166,7 +155,7 @@ async fn send_global_chat_message(
         Err(_) => SendGlobalChatMessageResponse::SendError,
     };
     let bytes = ok_or_return_error_http_resp!(serde_json::to_vec(&resp));
-    return respond(bytes);
+    respond(bytes)
 }
 struct ValidCookieToken {
     cookie_token: String,

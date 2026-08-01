@@ -55,7 +55,7 @@ pub async fn communication_with_match_servers(
     let address = format!("{ip}:{port}");
     let listener = TcpListener::bind(&address)
         .await
-        .expect(&format!("Couldn't bind to {address}"));
+        .unwrap_or_else(|_| panic!("Couldn't bind to {address}"));
     info!("WebSocket match comms server listening on {address}");
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
     loop {
@@ -94,7 +94,7 @@ pub async fn ws(
     let address = format!("{ip}:{port}");
     let listener = TcpListener::bind(&address)
         .await
-        .expect(&format!("Couldn't bind to {address}"));
+        .unwrap_or_else(|_| panic!("Couldn't bind to {address}"));
     info!("WebSocket server listening on {address}");
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
     let shutdown_rx_for_matchmaker_task = shutdown_tx.subscribe();
@@ -130,13 +130,12 @@ pub async fn ws(
 
 pub fn try_to_get_cookie_from_headers(req: &Request) -> Option<String> {
     let mut cookie = None;
-    if let Some(value) = req.headers().get(COOKIE_PREFIX) {
-        if let Ok(s) = value.to_str() {
+    if let Some(value) = req.headers().get(COOKIE_PREFIX)
+        && let Ok(s) = value.to_str() {
             cookie = Some(s.to_string());
             // native path — no protocol echo needed
             return cookie;
         }
-    }
     cookie
 }
 
@@ -153,7 +152,7 @@ impl CookieOrTokenRetrieval {
         if self.cookie_or_token.is_some() {
             return Ok(response);
         }
-        let (retrieved_cookie, hv) = retrieve_cookie_from_sec_websocket_protocol(&req)?;
+        let (retrieved_cookie, hv) = retrieve_cookie_from_sec_websocket_protocol(req)?;
         self.cookie_or_token = retrieved_cookie;
         response.headers_mut().insert("sec-websocket-protocol", hv);
         Ok(response)
@@ -387,19 +386,15 @@ async fn save_chat_message(
     user_id: UserId,
     message: String,
 ) -> Result<()> {
-    match sqlx::query!(
+    if let Err(e) = sqlx::query!(
         "INSERT INTO global_chat_messages (message_id, user_id, content) VALUES (gen_random_uuid()::text, $1, $2)",
         user_id.0,
         message
     )
     .execute(db_pool)
-    .await
-    {
-        Err(e) => {
-            error!("{e:#?}");
-            bail!(e);
-        }
-        _ => {}
+    .await {
+        error!("{e:#?}");
+        bail!(e);
     };
     Ok(())
 }
@@ -416,7 +411,7 @@ async fn send_latest_chat_messages(
     db_pool: &Pool<Postgres>,
     ws_writer: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
 ) -> Result<()> {
-    let latest_chat_messages = get_latest_chat_messages(&db_pool, 5).await?;
+    let latest_chat_messages = get_latest_chat_messages(db_pool, 5).await?;
     for msg in latest_chat_messages {
         let server_message = ServerMessage::NewGlobalChatMessage {
             content: msg.content,
@@ -681,7 +676,7 @@ fn retrieve_cookie_from_sec_websocket_protocol(
 
     let cookie_prefix = COOKIE_PREFIX;
     let matched = raw_protocols.iter().find_map(|p| {
-        p.strip_prefix(&cookie_prefix)
+        p.strip_prefix(cookie_prefix)
             .map(|enc| (p.clone(), enc.to_string()))
     });
 
@@ -701,5 +696,5 @@ fn retrieve_cookie_from_sec_websocket_protocol(
         *resp.status_mut() = StatusCode::UNAUTHORIZED;
         return Err(resp);
     };
-    return Ok((Some(decoded), hv));
+    Ok((Some(decoded), hv))
 }
