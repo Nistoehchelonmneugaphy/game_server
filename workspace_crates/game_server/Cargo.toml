@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 sqlx = { workspace = true }
 dotenvy = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 server = { workspace = true }
-game_server_structs = { workspace = true }
+game_server_public_api = { workspace = true }
 chrono = { workspace = true }
 reqwest = { workspace = true }
 tracing = { workspace = true }

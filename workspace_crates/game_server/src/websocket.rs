@@ -3,9 +3,9 @@ use futures_util::{
     SinkExt,
     stream::{SplitSink, StreamExt},
 };
-use game_server_structs::{
+use game_server_public_api::{
     ChatMessage, websocket_communication::{
-        COOKIE_PREFIX, ClientMessage, ClientMessageContent, MatchPlayer, MatchProcess, MatchTeam, MatchmakingMessage, QueueType, ServerMessage, UserId, decode_cookie_token,
+        COOKIE_PREFIX, ClientMessage, ClientMessageContent, MatchPlayer, MatchTeam, MatchmakingMessage, QueueType, ServerMessage, UserId, decode_cookie_token,
     },
 };
 use http::{HeaderValue, StatusCode};
@@ -638,6 +638,11 @@ async fn matchmaking_inner(
             Err(e) => error!("user_2_sender error: {e:#?}"),
         }
     }
+}
+
+pub struct MatchProcess {
+    pub port: u64,
+    pub child_process: tokio::process::Child,
 }
 
 async fn spawn_match_process(

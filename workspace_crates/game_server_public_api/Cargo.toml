@@ -1,5 +1,5 @@
 [package]
-name = "game_server_structs"
+name = "game_server_public_api"
 version = "0.1.0"
 edition = "2024"
 
@@ -10,4 +10,3 @@ strum = { workspace = true }
 bevy_ecs = { workspace = true }
 http = { workspace = true }
 base64 = { workspace = true }
-tokio = { workspace = true }

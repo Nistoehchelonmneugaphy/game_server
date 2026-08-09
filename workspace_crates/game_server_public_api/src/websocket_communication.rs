@@ -69,13 +69,6 @@ pub enum ServerMessage {
     Ping,
 }
 
-
-
-pub struct MatchProcess {
-    pub port: u64,
-    pub child_process: tokio::process::Child,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MatchPlayer {
     pub user_id: UserId,

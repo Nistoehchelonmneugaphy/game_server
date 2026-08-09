@@ -1,5 +1,5 @@
 use game_server::{GameServerConfig, ok_or_return_error_http_resp, websocket::ws};
-use game_server_structs::{
+use game_server_public_api::{
     FinalLoginStepError,
     FinalLoginStepErrorKind::JoinTokenValidationError,
     FinalLoginStepRequest, FinalLoginStepResponse, FinalLoginStepSuccess,

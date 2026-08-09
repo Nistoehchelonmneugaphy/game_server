@@ -1091,7 +1091,7 @@ dependencies = [
  "chrono",
  "dotenvy",
  "futures-util",
- "game_server_structs 0.1.0",
+ "game_server_public_api",
  "http",
  "rand",
  "reqwest",
@@ -1107,7 +1107,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "game_server_structs"
+name = "game_server_public_api"
 version = "0.1.0"
 dependencies = [
  "auth_system_structs",
@@ -1116,7 +1116,6 @@ dependencies = [
  "http",
  "serde",
  "strum",
- "tokio",
 ]
 
 [[package]]
@@ -2417,7 +2416,7 @@ dependencies = [
  "clap",
  "ehttp",
  "futures-util",
- "game_server_structs 0.1.0 (git+ssh://git@github.com/Aeroel/game_server.git)",
+ "game_server_structs",
  "http",
  "rand",
  "serde",
