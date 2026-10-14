@@ -23,8 +23,8 @@ tokio = { version = "1.53.1", default-features = false }
 reqwest = { version = "0.13.4", features = ["json", "cookies"] }
 anyhow = { version = "1.0.104" }
 server = { git = "ssh://git@github.com/Aeroel/server_2_only.git"}
-auth_system_structs = { git = "ssh://git@github.com/Aeroel/auth_system.git"}
-match_server = { git = "ssh://git@github.com/Aeroel/match_system.git", package = "server"}
+auth_system_structs = { git = "ssh://git@github.com/Nistoehchelonmneugaphy/auth_system.git"}
+match_server = { git = "ssh://git@github.com/Nistoehchelonmneugaphy/match_system.git", package = "server"}
 chrono = { version = "0.4.45", features = [ "serde" ] }
 tokio-tungstenite = "0.30.0"
 futures-util = "0.3.33"
